@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<!-- самая первая версия. относительно неплохая, однако RSA медленный и не слишком безопасный -->
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Secure Messenger (RSA-4096 + Emoji Fingerprint)</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ccc;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 5px 5px 0 0;
+            margin-right: 5px;
+        }
+        .tab.active {
+            background: #007cba;
+            color: white;
+            border-color: #ccc;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        textarea, input, button {
+            width: 100%;
+            margin: 8px 0;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 120px;
+            font-family: monospace;
+        }
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .card {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        button {
+            background: #007cba;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #005a87;
+        }
+        small {
+            color: #666;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .fingerprint {
+            font-size: 24px;
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin: 10px 0;
+            border: 2px dashed #dee2e6;
+        }
+        .verification-section {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border: 1px solid #ffeaa7;
+        }
+        .emoji-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 5px;
+            margin: 10px 0;
+        }
+        .emoji-item {
+            font-size: 20px;
+            text-align: center;
+            padding: 8px;
+            background: white;
+            border-radius: 5px;
+            border: 2px solid transparent;
+            cursor: pointer;
+        }
+        .emoji-item.selected {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔐 Secure Messenger (RSA-4096 + Emoji Fingerprint)</h1>
+    
+    <div class="tabs">
+        <div class="tab active" data-tab="key-exchange">🔑 Обмен ключами</div>
+        <div class="tab" data-tab="messaging">💬 Переписка</div>
+    </div>
+
+    <!-- Вкладка обмена ключами -->
+    <div id="key-exchange" class="tab-content active">
+        <div class="card">
+            <h3>1. Генерация ключей RSA-4096</h3>
+            <button id="generateKeys">Сгенерировать мои ключи (RSA-4096)</button>
+            
+            <div class="verification-section">
+                <h4>🔍 Отпечаток моего публичного ключа:</h4>
+                <div class="fingerprint" id="myFingerprint">—</div>
+                <small>Сравните этот отпечаток с отпечатком друга при обмене ключами</small>
+            </div>
+            
+            <label>Мой публичный ключ (для передачи другу):</label>
+            <textarea id="publicKey" placeholder="Публичный ключ появится здесь..."></textarea>
+            
+            <label>Мой приватный ключ (хранить в секрете!):</label>
+            <textarea id="privateKey" placeholder="Приватный ключ появится здесь..."></textarea>
+        </div>
+
+        <div class="row">
+            <div class="card">
+                <h3>2. Отправить ключ AES другу</h3>
+                <label>Публичный ключ друга:</label>
+                <textarea id="friendsPublicKey" placeholder="Вставьте публичный ключ друга..." oninput="updateFriendFingerprint()"></textarea>
+                
+                <div class="verification-section" id="friendVerification" style="display: none;">
+                    <h4>🔍 Отпечаток ключа друга:</h4>
+                    <div class="fingerprint" id="friendFingerprint">—</div>
+                    <div id="fingerprintMatch" style="display: none;">
+                        <div style="color: #28a745; font-weight: bold; margin: 10px 0;">
+                            ✅ Отпечатки совпадают! Ключ подлинный
+                        </div>
+                    </div>
+                    <div id="fingerprintMismatch" style="display: none;">
+                        <div style="color: #dc3545; font-weight: bold; margin: 10px 0;">
+                            ❌ Отпечатки не совпадают! Возможна MITM-атака
+                        </div>
+                    </div>
+                </div>
+                
+                <button id="generateAesKey">Сгенерировать ключ AES-256</button>
+                <input type="text" id="aesKey" placeholder="Ключ AES появится здесь..." readonly>
+                
+                <button id="encryptAesKey">Зашифровать ключ AES для друга</button>
+                
+                <label>Результат (передайте другу):</label>
+                <textarea id="encryptedAesKey" placeholder="Зашифрованный ключ AES..."></textarea>
+            </div>
+
+            <div class="card">
+                <h3>3. Получить ключ AES от друга</h3>
+                <label>Мой приватный ключ:</label>
+                <textarea id="myPrivateKey" placeholder="Вставьте ваш приватный ключ..."></textarea>
+                
+                <label>Зашифрованный ключ AES от друга:</label>
+                <textarea id="encryptedKeyFromFriend" placeholder="Вставьте зашифрованный ключ AES..."></textarea>
+                
+                <button id="decryptAesKey">Расшифровать ключ AES</button>
+                
+                <label>Полученный ключ AES:</label>
+                <input type="text" id="receivedAesKey" placeholder="Расшифрованный ключ AES..." readonly>
+                
+                <button id="useAesKey">Использовать этот ключ для переписки</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Вкладка переписки -->
+    <div id="messaging" class="tab-content">
+        <div class="card">
+            <h3>💬 Переписка с помощью AES-GCM</h3>
+            
+            <div class="status info" id="aesStatus">
+                Ключ AES не установлен. Перейдите во вкладку "Обмен ключами"
+            </div>
+            
+            <label>Ключ AES (будет автоматически установлен):</label>
+            <input type="text" id="currentAesKey" placeholder="Здесь будет ваш ключ AES..." readonly>
+            
+            <div class="row">
+                <div>
+                    <label>Сообщение для шифрования:</label>
+                    <textarea id="messageToEncrypt" placeholder="Введите ваше сообщение..."></textarea>
+                    <button id="encryptMessage">Зашифровать сообщение</button>
+                </div>
+                
+                <div>
+                    <label>Зашифрованное сообщение:</label>
+                    <textarea id="encryptedMessage" placeholder="Зашифрованное сообщение..."></textarea>
+                    <button id="decryptMessage">Расшифровать сообщение</button>
+                </div>
+            </div>
+            
+            <label>Результат:</label>
+            <textarea id="decryptedMessage" placeholder="Расшифрованное сообщение..." readonly></textarea>
+        </div>
+    </div>
+
+    <small>
+        📝 <strong>Как использовать:</strong><br>
+        1. Сгенерируйте RSA-4096 ключи и обменяйтесь публичными ключами с другом<br>
+        2. <strong>Сравните отпечатки ключей</strong> (последовательность эмодзи) по защищенному каналу<br>
+        3. Если отпечатки совпадают - ключи подлинные, можно продолжать<br>
+        4. Используйте AES-256 для быстрой и безопасной переписки
+    </small>
+
+    <script>
+        const te = new TextEncoder();
+        const td = new TextDecoder();
+        let currentAesKey = null;
+        let myFingerprint = '';
+
+        // Список эмодзи для отпечатков (32 эмодзи для 5-битного кодирования)
+        const EMOJIS = ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🐔", 
+                       "🐧", "🐦", "🐤", "🦄", "🐴", "🦋", "🐢", "🐠", "🐙", "🐬", "🦑", "🐝", "🦀", "🐳", "🦉", "🐺"];
+
+        // Переключение вкладок
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // Генерация отпечатка ключа в виде эмодзи
+        async function generateFingerprint(publicKeyBuffer) {
+            // Хешируем публичный ключ
+            const hashBuffer = await crypto.subtle.digest('SHA-256', publicKeyBuffer);
+            const hashArray = new Uint8Array(hashBuffer);
+            
+            // Берем первые 10 байт (80 бит) и кодируем в 16 эмодзи (5 бит на эмодзи)
+            let fingerprint = '';
+            let bits = '';
+            
+            // Собираем битовую строку из первых 10 байт
+            for (let i = 0; i < 10; i++) {
+                bits += hashArray[i].toString(2).padStart(8, '0');
+            }
+            
+            // Разбиваем на группы по 5 бит и преобразуем в эмодзи
+            for (let i = 0; i < 16; i++) {
+                const start = i * 5;
+                const fiveBits = bits.substring(start, start + 5);
+                const index = parseInt(fiveBits, 2);
+                fingerprint += EMOJIS[index % EMOJIS.length];
+            }
+            
+            return fingerprint;
+        }
+
+        // Кодирование в Base64
+        function arrayBufferToBase64(buffer) {
+            return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+        }
+
+        // Декодирование из Base64
+        function base64ToArrayBuffer(base64) {
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        // Генерация RSA-4096 ключей
+        document.getElementById('generateKeys').addEventListener('click', async () => {
+            try {
+                const keyPair = await crypto.subtle.generateKey(
+                    {
+                        name: "RSA-OAEP",
+                        modulusLength: 4096, // Увеличили до 4096 бит
+                        publicExponent: new Uint8Array([1, 0, 1]),
+                        hash: "SHA-256"
+                    },
+                    true,
+                    ["encrypt", "decrypt"]
+                );
+
+                // Экспорт публичного ключа
+                const publicKey = await crypto.subtle.exportKey("spki", keyPair.publicKey);
+                const publicKeyBase64 = arrayBufferToBase64(publicKey);
+                document.getElementById('publicKey').value = publicKeyBase64;
+                
+                // Генерация отпечатка
+                myFingerprint = await generateFingerprint(publicKey);
+                document.getElementById('myFingerprint').textContent = myFingerprint;
+
+                // Экспорт приватного ключа
+                const privateKey = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
+                document.getElementById('privateKey').value = arrayBufferToBase64(privateKey);
+                document.getElementById('myPrivateKey').value = arrayBufferToBase64(privateKey);
+
+                showStatus('success', 'RSA-4096 ключи сгенерированы! Сравните отпечаток с другом.');
+            } catch (error) {
+                showStatus('error', 'Ошибка генерации ключей: ' + error.message);
+            }
+        });
+
+        // Обновление отпечатка ключа друга
+        async function updateFriendFingerprint() {
+            const friendsPublicKeyBase64 = document.getElementById('friendsPublicKey').value.trim();
+            
+            if (!friendsPublicKeyBase64) {
+                document.getElementById('friendVerification').style.display = 'none';
+                return;
+            }
+
+            try {
+                const publicKeyBuffer = base64ToArrayBuffer(friendsPublicKeyBase64);
+                const friendFingerprint = await generateFingerprint(publicKeyBuffer);
+                
+                document.getElementById('friendFingerprint').textContent = friendFingerprint;
+                document.getElementById('friendVerification').style.display = 'block';
+                
+                // Проверка совпадения отпечатков
+                if (myFingerprint && friendFingerprint === myFingerprint) {
+                    document.getElementById('fingerprintMatch').style.display = 'block';
+                    document.getElementById('fingerprintMismatch').style.display = 'none';
+                } else {
+                    document.getElementById('fingerprintMatch').style.display = 'none';
+                    document.getElementById('fingerprintMismatch').style.display = 'none';
+                }
+            } catch (error) {
+                document.getElementById('friendFingerprint').textContent = '❌ Неверный формат ключа';
+                document.getElementById('friendVerification').style.display = 'block';
+            }
+        }
+
+        // Генерация AES-ключа
+        document.getElementById('generateAesKey').addEventListener('click', async () => {
+            try {
+                const key = await crypto.subtle.generateKey(
+                    { name: "AES-GCM", length: 256 },
+                    true,
+                    ["encrypt", "decrypt"]
+                );
+                
+                const exportedKey = await crypto.subtle.exportKey("raw", key);
+                const keyBase64 = arrayBufferToBase64(exportedKey);
+                
+                document.getElementById('aesKey').value = keyBase64;
+                showStatus('success', 'Ключ AES-256 сгенерирован!');
+            } catch (error) {
+                showStatus('error', 'Ошибка генерации AES-ключа: ' + error.message);
+            }
+        });
+
+        // Шифрование AES-ключа для друга
+        document.getElementById('encryptAesKey').addEventListener('click', async () => {
+            try {
+                const friendsPublicKeyBase64 = document.getElementById('friendsPublicKey').value.trim();
+                const aesKeyBase64 = document.getElementById('aesKey').value.trim();
+
+                if (!friendsPublicKeyBase64 || !aesKeyBase64) {
+                    showStatus('error', 'Введите публичный ключ друга и AES-ключ');
+                    return;
+                }
+
+                // Импорт публичного ключа друга
+                const publicKeyBuffer = base64ToArrayBuffer(friendsPublicKeyBase64);
+                const publicKey = await crypto.subtle.importKey(
+                    "spki",
+                    publicKeyBuffer,
+                    { name: "RSA-OAEP", hash: "SHA-256" },
+                    false,
+                    ["encrypt"]
+                );
+
+                // Шифрование AES-ключа
+                const aesKeyBuffer = base64ToArrayBuffer(aesKeyBase64);
+                const encryptedData = await crypto.subtle.encrypt(
+                    { name: "RSA-OAEP" },
+                    publicKey,
+                    aesKeyBuffer
+                );
+
+                document.getElementById('encryptedAesKey').value = arrayBufferToBase64(encryptedData);
+                showStatus('success', 'AES-ключ зашифрован! Передайте результат другу.');
+            } catch (error) {
+                showStatus('error', 'Ошибка шифрования: ' + error.message);
+            }
+        });
+
+        // Расшифровка AES-ключа от друга
+        document.getElementById('decryptAesKey').addEventListener('click', async () => {
+            try {
+                const myPrivateKeyBase64 = document.getElementById('myPrivateKey').value.trim();
+                const encryptedKeyBase64 = document.getElementById('encryptedKeyFromFriend').value.trim();
+
+                if (!myPrivateKeyBase64 || !encryptedKeyBase64) {
+                    showStatus('error', 'Введите приватный ключ и зашифрованный AES-ключ');
+                    return;
+                }
+
+                // Импорт приватного ключа
+                const privateKeyBuffer = base64ToArrayBuffer(myPrivateKeyBase64);
+                const privateKey = await crypto.subtle.importKey(
+                    "pkcs8",
+                    privateKeyBuffer,
+                    { name: "RSA-OAEP", hash: "SHA-256" },
+                    false,
+                    ["decrypt"]
+                );
+
+                // Расшифровка AES-ключа
+                const encryptedData = base64ToArrayBuffer(encryptedKeyBase64);
+                const decryptedData = await crypto.subtle.decrypt(
+                    { name: "RSA-OAEP" },
+                    privateKey,
+                    encryptedData
+                );
+
+                const aesKeyBase64 = arrayBufferToBase64(decryptedData);
+                document.getElementById('receivedAesKey').value = aesKeyBase64;
+                showStatus('success', 'AES-ключ расшифрован!');
+            } catch (error) {
+                showStatus('error', 'Ошибка расшифровки: ' + error.message);
+            }
+        });
+
+        // Использование AES-ключа для переписки
+        document.getElementById('useAesKey').addEventListener('click', async () => {
+            const aesKeyBase64 = document.getElementById('receivedAesKey').value.trim();
+            
+            if (!aesKeyBase64) {
+                showStatus('error', 'Сначала расшифруйте AES-ключ');
+                return;
+            }
+
+            try {
+                const keyBuffer = base64ToArrayBuffer(aesKeyBase64);
+                currentAesKey = await crypto.subtle.importKey(
+                    "raw",
+                    keyBuffer,
+                    { name: "AES-GCM" },
+                    false,
+                    ["encrypt", "decrypt"]
+                );
+
+                document.getElementById('currentAesKey').value = aesKeyBase64;
+                document.getElementById('aesStatus').className = 'status success';
+                document.getElementById('aesStatus').textContent = '✅ Ключ AES-256 установлен и готов к использованию!';
+                
+                showStatus('success', 'Ключ AES установлен для переписки!');
+            } catch (error) {
+                showStatus('error', 'Ошибка импорта AES-ключа: ' + error.message);
+            }
+        });
+
+        // Шифрование сообщения
+        document.getElementById('encryptMessage').addEventListener('click', async () => {
+            if (!currentAesKey) {
+                showStatus('error', 'Сначала установите AES-ключ');
+                return;
+            }
+
+            try {
+                const message = document.getElementById('messageToEncrypt').value;
+                if (!message) {
+                    showStatus('error', 'Введите сообщение для шифрования');
+                    return;
+                }
+
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                const encrypted = await crypto.subtle.encrypt(
+                    { name: "AES-GCM", iv },
+                    currentAesKey,
+                    te.encode(message)
+                );
+
+                // Сохраняем IV вместе с зашифрованными данными
+                const combined = new Uint8Array(iv.length + encrypted.byteLength);
+                combined.set(iv, 0);
+                combined.set(new Uint8Array(encrypted), iv.length);
+
+                document.getElementById('encryptedMessage').value = arrayBufferToBase64(combined);
+                showStatus('success', 'Сообщение зашифровано!');
+            } catch (error) {
+                showStatus('error', 'Ошибка шифрования: ' + error.message);
+            }
+        });
+
+        // Расшифровка сообщения
+        document.getElementById('decryptMessage').addEventListener('click', async () => {
+            if (!currentAesKey) {
+                showStatus('error', 'Сначала установите AES-ключ');
+                return;
+            }
+
+            try {
+                const encryptedBase64 = document.getElementById('encryptedMessage').value.trim();
+                if (!encryptedBase64) {
+                    showStatus('error', 'Введите зашифрованное сообщение');
+                    return;
+                }
+
+                const combined = base64ToArrayBuffer(encryptedBase64);
+                const iv = new Uint8Array(combined.slice(0, 12));
+                const encrypted = new Uint8Array(combined.slice(12));
+
+                const decrypted = await crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv },
+                    currentAesKey,
+                    encrypted
+                );
+
+                document.getElementById('decryptedMessage').value = td.decode(decrypted);
+                showStatus('success', 'Сообщение расшифровано!');
+            } catch (error) {
+                showStatus('error', 'Ошибка расшифровки: ' + error.message);
+            }
+        });
+
+        function showStatus(type, message) {
+            // Можно добавить более красивый вывод статусов
+            alert(message);
+        }
+    </script>
+</body>
+</html>
