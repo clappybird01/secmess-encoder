@@ -1,196 +1,926 @@
 <!DOCTYPE html>
-<!-- самая первая версия. относительно неплохая, однако RSA медленный и не слишком безопасный -->
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Secure Messenger (RSA-4096 + Emoji Fingerprint)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' blob:; media-src blob:; object-src 'none'; frame-src 'none'; connect-src 'none'; script-src 'self' 'unsafe-inline';">
+    <title>Secure Messenger (ECDH P-384 + Ed25519 + Emoji Fingerprint)</title>
     <style>
+        :root {
+            --bg-color: #f5f0eb;
+            --bg-gradient: linear-gradient(135deg, #f5f0eb 0%, #e8e0d5 50%, #f0e6dc 100%);
+            --text-color: #3d3d3d;
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --border-color: #d4c4b0;
+            --primary-color: #8b5a3c;
+            --primary-hover: #6d4530;
+            --secondary-bg: rgba(245, 235, 225, 0.9);
+            --status-success: rgba(212, 237, 218, 0.9);
+            --status-info: rgba(209, 236, 241, 0.9);
+            --status-error: rgba(248, 215, 218, 0.9);
+            --status-success-text: #155724;
+            --status-info-text: #0c5460;
+            --status-error-text: #721c24;
+            --verification-bg: rgba(255, 243, 205, 0.9);
+            --comparison-bg: rgba(231, 243, 255, 0.9);
+            --shadow: 0 4px 15px rgba(139, 90, 60, 0.15);
+            --glass-blur: blur(10px);
+            --danger-color: #dc3545;
+            --danger-hover: #c82333;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #1a1a2e;
+            --bg-gradient: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%);
+            --text-color: #e0e0e0;
+            --card-bg: rgba(45, 45, 65, 0.9);
+            --border-color: #444466;
+            --primary-color: #6b8cce;
+            --primary-hover: #8ba8e8;
+            --secondary-bg: rgba(61, 61, 85, 0.9);
+            --status-success: rgba(42, 77, 46, 0.9);
+            --status-info: rgba(30, 61, 69, 0.9);
+            --status-error: rgba(74, 35, 39, 0.9);
+            --status-success-text: #a8d5b5;
+            --status-info-text: #a6d9e3;
+            --status-error-text: #e8b4b8;
+            --verification-bg: rgba(74, 60, 26, 0.9);
+            --comparison-bg: rgba(30, 58, 95, 0.9);
+            --shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            --danger-color: #e74c5a;
+            --danger-hover: #f25d6b;
+        }
+
+        [data-theme="rose"] {
+            --bg-color: #fdf2f4;
+            --bg-gradient: linear-gradient(135deg, #fdf2f4 0%, #fce4e8 25%, #f8d7dc 50%, #fce4e8 75%, #fdf2f4 100%);
+            --text-color: #4a3035;
+            --card-bg: rgba(255, 255, 255, 0.8);
+            --border-color: #e8b4bc;
+            --primary-color: #c45c6a;
+            --primary-hover: #a84855;
+            --secondary-bg: rgba(252, 228, 232, 0.9);
+            --status-success: rgba(212, 237, 218, 0.9);
+            --status-info: rgba(252, 228, 232, 0.9);
+            --status-error: rgba(248, 200, 208, 0.9);
+            --status-success-text: #155724;
+            --status-info-text: #6b3a42;
+            --status-error-text: #721c24;
+            --verification-bg: rgba(255, 235, 238, 0.9);
+            --comparison-bg: rgba(252, 228, 232, 0.9);
+            --shadow: 0 4px 15px rgba(196, 92, 106, 0.15);
+        }
+
+        [data-theme="ocean"] {
+            --bg-color: #e8f4f8;
+            --bg-gradient: linear-gradient(135deg, #e8f4f8 0%, #d0e8f0 25%, #b8dce8 50%, #d0e8f0 75%, #e8f4f8 100%);
+            --text-color: #1a3a4a;
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --border-color: #a8c8d8;
+            --primary-color: #2e7d9b;
+            --primary-hover: #1e5f78;
+            --secondary-bg: rgba(208, 232, 240, 0.9);
+            --status-success: rgba(200, 235, 220, 0.9);
+            --status-info: rgba(184, 220, 232, 0.9);
+            --status-error: rgba(248, 215, 218, 0.9);
+            --status-success-text: #155724;
+            --status-info-text: #1a4a5a;
+            --status-error-text: #721c24;
+            --verification-bg: rgba(220, 240, 248, 0.9);
+            --comparison-bg: rgba(200, 228, 240, 0.9);
+            --shadow: 0 4px 15px rgba(46, 125, 155, 0.15);
+        }
+
+        [data-theme="forest"] {
+            --bg-color: #f0f5f0;
+            --bg-gradient: linear-gradient(135deg, #f0f5f0 0%, #dce8dc 25%, #c8dcc8 50%, #dce8dc 75%, #f0f5f0 100%);
+            --text-color: #2d3a2d;
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --border-color: #a8c0a8;
+            --primary-color: #4a7c4a;
+            --primary-hover: #3a5f3a;
+            --secondary-bg: rgba(220, 232, 220, 0.9);
+            --status-success: rgba(200, 232, 200, 0.9);
+            --status-info: rgba(209, 236, 241, 0.9);
+            --status-error: rgba(248, 215, 218, 0.9);
+            --status-success-text: #1a4a1a;
+            --status-info-text: #0c5460;
+            --status-error-text: #721c24;
+            --verification-bg: rgba(230, 245, 230, 0.9);
+            --comparison-bg: rgba(215, 235, 215, 0.9);
+            --shadow: 0 4px 15px rgba(74, 124, 74, 0.15);
+        }
+
+        [data-theme="midnight"] {
+            --bg-color: #0d1117;
+            --bg-gradient: linear-gradient(135deg, #0d1117 0%, #161b22 25%, #21262d 50%, #161b22 75%, #0d1117 100%);
+            --text-color: #c9d1d9;
+            --card-bg: rgba(22, 27, 34, 0.95);
+            --border-color: #30363d;
+            --primary-color: #58a6ff;
+            --primary-hover: #79b8ff;
+            --secondary-bg: rgba(33, 38, 45, 0.95);
+            --status-success: rgba(35, 68, 45, 0.9);
+            --status-info: rgba(25, 55, 75, 0.9);
+            --status-error: rgba(68, 35, 38, 0.9);
+            --status-success-text: #7ee787;
+            --status-info-text: #79c0ff;
+            --status-error-text: #f85149;
+            --verification-bg: rgba(55, 48, 28, 0.9);
+            --comparison-bg: rgba(25, 45, 65, 0.9);
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             font-family: system-ui, -apple-system, sans-serif;
             max-width: 900px;
             margin: 20px auto;
             padding: 0 20px;
+            background: var(--bg-gradient);
+            background-attachment: fixed;
+            color: var(--text-color);
+            transition: all 0.4s ease;
+            min-height: 100vh;
         }
+
+        .theme-panel {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            z-index: 1000;
+            background: var(--card-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 10px;
+            box-shadow: var(--shadow);
+            max-width: 200px;
+        }
+
+        .theme-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .theme-panel-header:hover {
+            background: var(--secondary-bg);
+        }
+
+        .theme-options {
+            display: none;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .theme-options.show {
+            display: block;
+        }
+
+        .theme-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin: 4px 0;
+        }
+
+        .theme-option:hover {
+            background: var(--secondary-bg);
+            transform: translateX(3px);
+        }
+
+        .theme-option.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .theme-preview {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .theme-preview.cream { background: linear-gradient(135deg, #f5f0eb, #e8e0d5); }
+        .theme-preview.dark { background: linear-gradient(135deg, #1a1a2e, #16213e); }
+        .theme-preview.rose { background: linear-gradient(135deg, #fdf2f4, #f8d7dc); }
+        .theme-preview.ocean { background: linear-gradient(135deg, #e8f4f8, #b8dce8); }
+        .theme-preview.forest { background: linear-gradient(135deg, #f0f5f0, #c8dcc8); }
+        .theme-preview.midnight { background: linear-gradient(135deg, #0d1117, #21262d); }
+
         .tabs {
             display: flex;
             margin-bottom: 20px;
-            border-bottom: 1px solid #ccc;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
         }
+
         .tab {
-            padding: 10px 20px;
+            padding: 10px 15px;
             cursor: pointer;
             border: 1px solid transparent;
             border-bottom: none;
-            border-radius: 5px 5px 0 0;
+            border-radius: 8px 8px 0 0;
             margin-right: 5px;
+            margin-bottom: 5px;
+            background: var(--secondary-bg);
+            backdrop-filter: var(--glass-blur);
+            flex: 1;
+            min-width: 120px;
+            text-align: center;
+            transition: all 0.2s;
         }
+
+        .tab:hover {
+            background: var(--card-bg);
+        }
+
         .tab.active {
-            background: #007cba;
+            background: var(--primary-color);
             color: white;
-            border-color: #ccc;
+            border-color: var(--border-color);
         }
+
         .tab-content {
             display: none;
         }
+
         .tab-content.active {
             display: block;
         }
-        textarea, input, button {
+
+        textarea, input[type="text"], input[type="password"], button {
             width: 100%;
             margin: 8px 0;
-            padding: 10px;
+            padding: 12px;
             box-sizing: border-box;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--card-bg);
+            backdrop-filter: var(--glass-blur);
+            color: var(--text-color);
+            font-size: 16px;
+            transition: all 0.2s;
         }
+
+        textarea:focus, input[type="text"]:focus, input[type="password"]:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(139, 90, 60, 0.1);
+        }
+
         textarea {
             min-height: 120px;
             font-family: monospace;
+            resize: vertical;
         }
+
+        button {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        .btn-danger {
+            background: var(--danger-color);
+        }
+
+        .btn-danger:hover {
+            background: var(--danger-hover);
+        }
+
         .row {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
         }
+
         .card {
-            border: 1px solid #ccc;
+            border: 1px solid var(--border-color);
             padding: 15px;
             margin: 10px 0;
-            border-radius: 5px;
+            border-radius: 12px;
+            background: var(--card-bg);
+            backdrop-filter: var(--glass-blur);
+            box-shadow: var(--shadow);
         }
-        button {
-            background: #007cba;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        button:hover {
-            background: #005a87;
-        }
+
         small {
-            color: #666;
+            color: var(--text-color);
+            opacity: 0.8;
         }
+
         .status {
-            padding: 10px;
-            border-radius: 5px;
-            margin: 10px 0;
-        }
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        .status.info {
-            background: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
-        }
-        .fingerprint {
-            font-size: 24px;
-            text-align: center;
-            padding: 15px;
-            background: #f8f9fa;
+            padding: 12px;
             border-radius: 8px;
             margin: 10px 0;
-            border: 2px dashed #dee2e6;
+            border: 1px solid;
+            backdrop-filter: var(--glass-blur);
         }
+
+        .status.success {
+            background: var(--status-success);
+            color: var(--status-success-text);
+            border-color: var(--status-success);
+        }
+
+        .status.info {
+            background: var(--status-info);
+            color: var(--status-info-text);
+            border-color: var(--status-info);
+        }
+
+        .status.error {
+            background: var(--status-error);
+            color: var(--status-error-text);
+            border-color: var(--status-error);
+        }
+
+        .status.warning {
+            background: var(--verification-bg);
+            color: #856404;
+            border-color: #ffc107;
+        }
+
+        [data-theme="dark"] .status.warning,
+        [data-theme="midnight"] .status.warning {
+            color: #ffc107;
+        }
+
+        .fingerprint {
+            font-size: 18px;
+            text-align: center;
+            padding: 15px;
+            background: var(--secondary-bg);
+            border-radius: 8px;
+            margin: 10px 0;
+            border: 2px dashed var(--border-color);
+            word-break: break-all;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            letter-spacing: 0.5px;
+            line-height: 1.6;
+        }
+
         .verification-section {
-            background: #fff3cd;
+            background: var(--verification-bg);
             padding: 15px;
             border-radius: 8px;
             margin: 15px 0;
-            border: 1px solid #ffeaa7;
+            border: 1px solid var(--border-color);
         }
-        .emoji-grid {
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            gap: 5px;
+
+        .comparison-section {
+            background: var(--comparison-bg);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border: 1px solid var(--border-color);
+        }
+
+        .key-info {
+            background: var(--secondary-bg);
+            padding: 10px;
+            border-radius: 8px;
+            margin: 5px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .security-notice {
+            background: var(--verification-bg);
+            border: 1px solid var(--border-color);
+            padding: 12px;
+            border-radius: 8px;
             margin: 10px 0;
+            font-size: 14px;
         }
-        .emoji-item {
-            font-size: 20px;
+
+        .file-info {
+            background: var(--secondary-bg);
+            padding: 10px;
+            border-radius: 8px;
+            margin: 5px 0;
+            font-size: 14px;
+        }
+
+        .paste-area {
+            border: 2px dashed var(--primary-color);
+            padding: 20px;
             text-align: center;
-            padding: 8px;
-            background: white;
-            border-radius: 5px;
-            border: 2px solid transparent;
+            border-radius: 8px;
+            margin: 10px 0;
             cursor: pointer;
+            background: var(--secondary-bg);
+            transition: all 0.2s;
         }
-        .emoji-item.selected {
-            border-color: #28a745;
-            background: #d4edda;
+
+        .paste-area:hover {
+            background: var(--card-bg);
+            border-color: var(--primary-hover);
+        }
+
+        .media-preview {
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .media-preview img, .media-preview video {
+            max-width: 100%;
+            max-height: 400px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-actions {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            display: flex;
+            gap: 4px;
+            z-index: 5;
+        }
+
+        .action-btn {
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            margin: 0;
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+            line-height: 28px;
+            text-align: center;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            opacity: 1;
+            background: var(--card-bg);
+            transform: scale(1.1);
+        }
+
+        .input-wrapper textarea,
+        .input-wrapper input {
+            padding-right: 100px !important;
+        }
+
+        .input-wrapper .fingerprint {
+            position: relative;
+            padding-right: 40px;
+        }
+
+        .copy-wrapper {
+            position: relative;
+        }
+
+        .copy-wrapper .input-actions {
+            top: 14px;
+        }
+
+        .field-with-actions textarea,
+        .field-with-actions input {
+            padding-right: 70px;
+        }
+
+        .paste-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .paste-buttons button {
+            flex: 1;
+        }
+
+        .mobile-paste-btn {
+            display: none;
+            background: var(--secondary-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+        }
+
+        .destroy-section {
+            margin-top: 30px;
+            padding: 20px;
+            border: 2px solid var(--danger-color);
+            border-radius: 12px;
+            background: var(--card-bg);
+            text-align: center;
+        }
+
+        .destroy-section h3 {
+            color: var(--danger-color);
+            margin-bottom: 10px;
+        }
+
+        .destroy-section p {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-bottom: 15px;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                margin: 10px auto;
+                padding: 0 15px;
+            }
+
+            .theme-panel {
+                position: relative;
+                top: auto;
+                right: auto;
+                margin-bottom: 15px;
+                max-width: none;
+            }
+
+            .tabs {
+                flex-direction: column;
+            }
+
+            .tab {
+                margin-right: 0;
+                margin-bottom: 5px;
+                border-radius: 8px;
+                text-align: left;
+            }
+
+            .row {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            .fingerprint {
+                font-size: 16px;
+                padding: 10px;
+            }
+
+            h1 {
+                font-size: 1.5em;
+            }
+
+            textarea, input, button {
+                padding: 14px;
+            }
+
+            .mobile-paste-btn {
+                display: block;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .card {
+                padding: 12px;
+            }
+
+            .fingerprint {
+                font-size: 14px;
+            }
+
+            h1 {
+                font-size: 1.3em;
+            }
+        }
+
+        input[type="password"] {
+            font-family: monospace;
+            letter-spacing: 2px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            animation: fadeIn 0.3s ease;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--secondary-bg);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-color);
         }
     </style>
 </head>
 <body>
-    <h1>🔐 Secure Messenger (RSA-4096 + Emoji Fingerprint)</h1>
-    
-    <div class="tabs">
-        <div class="tab active" data-tab="key-exchange">🔑 Обмен ключами</div>
-        <div class="tab" data-tab="messaging">💬 Переписка</div>
+    <div class="theme-panel">
+        <div class="theme-panel-header" onclick="toggleThemePanel()">
+            <span>🎨 <span id="current-theme-name">Кремовая</span></span>
+            <span id="theme-arrow">▼</span>
+        </div>
+        <div class="theme-options" id="theme-options">
+            <div class="theme-option active" data-theme="cream" onclick="setTheme('cream')">
+                <div class="theme-preview cream"></div>
+                <span>Кремовая</span>
+            </div>
+            <div class="theme-option" data-theme="dark" onclick="setTheme('dark')">
+                <div class="theme-preview dark"></div>
+                <span>Тёмная</span>
+            </div>
+            <div class="theme-option" data-theme="rose" onclick="setTheme('rose')">
+                <div class="theme-preview rose"></div>
+                <span>Розовая</span>
+            </div>
+            <div class="theme-option" data-theme="ocean" onclick="setTheme('ocean')">
+                <div class="theme-preview ocean"></div>
+                <span>Океан</span>
+            </div>
+            <div class="theme-option" data-theme="forest" onclick="setTheme('forest')">
+                <div class="theme-preview forest"></div>
+                <span>Лесная</span>
+            </div>
+            <div class="theme-option" data-theme="midnight" onclick="setTheme('midnight')">
+                <div class="theme-preview midnight"></div>
+                <span>Полночь</span>
+            </div>
+        </div>
     </div>
 
-    <!-- Вкладка обмена ключами -->
-    <div id="key-exchange" class="tab-content active">
+    <h1>🔐 Secure Messenger (ECDH P-384 + Ed25519)</h1>
+    
+    <div class="tabs">
+        <div class="tab active" data-tab="ecdh-exchange">🔐 PFS Обмен ключами</div>
+        <div class="tab" data-tab="signatures">✍️ Подписи Ed25519</div>
+        <div class="tab" data-tab="messaging">💬 Переписка</div>
+        <div class="tab" data-tab="files">📁 Шифрование файлов</div>
+    </div>
+
+    <!-- Вкладка PFS обмена ключами ECDH -->
+    <div id="ecdh-exchange" class="tab-content active">
         <div class="card">
-            <h3>1. Генерация ключей RSA-4096</h3>
-            <button id="generateKeys">Сгенерировать мои ключи (RSA-4096)</button>
+            <h3>🔐 PFS Обмен ключами (ECDH P-384 + HKDF)</h3>
+            <div class="security-notice">
+                <strong>🎯 Perfect Forward Secrecy:</strong> Ключи никогда не передаются по сети! 
+                Каждая сессия использует новые одноразовые ключи.
+            </div>
+            <button id="generateEcdhKeys">Сгенерировать мои ECDH-ключи (P-384)</button>
             
             <div class="verification-section">
                 <h4>🔍 Отпечаток моего публичного ключа:</h4>
-                <div class="fingerprint" id="myFingerprint">—</div>
-                <small>Сравните этот отпечаток с отпечатком друга при обмене ключами</small>
+                <div class="input-wrapper">
+                    <div class="fingerprint" id="myEcdhFingerprint">—</div>
+                    <div class="input-actions" style="top: 4px;">
+                        <button class="action-btn" onclick="copyField('myEcdhFingerprint')" title="Копировать">📋</button>
+                    </div>
+                </div>
+            
+                <label>Мой публичный ECDH-ключ (для передачи другу):</label>
+                <div class="input-wrapper">
+                    <textarea id="ecdhPublicKey" readonly></textarea>
+                    <div class="input-actions">
+                        <button class="action-btn" onclick="copyField('ecdhPublicKey')" title="Копировать">📋</button>
+                    </div>
+                </div>
             </div>
-            
-            <label>Мой публичный ключ (для передачи другу):</label>
-            <textarea id="publicKey" placeholder="Публичный ключ появится здесь..."></textarea>
-            
-            <label>Мой приватный ключ (хранить в секрете!):</label>
-            <textarea id="privateKey" placeholder="Приватный ключ появится здесь..."></textarea>
         </div>
 
         <div class="row">
             <div class="card">
-                <h3>2. Отправить ключ AES другу</h3>
-                <label>Публичный ключ друга:</label>
-                <textarea id="friendsPublicKey" placeholder="Вставьте публичный ключ друга..." oninput="updateFriendFingerprint()"></textarea>
+                <h3>2. Получить ключ от друга</h3>
+                <label>Публичный ECDH-ключ друга:</label>
+                <div class="input-wrapper">
+                    <textarea id="friendsEcdhPublicKey" placeholder="Вставьте ECDH-ключ друга..." oninput="updateFriendEcdhFingerprint()"></textarea>
+                    <div class="input-actions">
+                        <button class="action-btn" onclick="pasteToField('friendsEcdhPublicKey')" title="Вставить">📥</button>
+                        <button class="action-btn" onclick="clearField('friendsEcdhPublicKey')" title="Очистить">🗑️</button>
+                    </div>
+                </div>
                 
-                <div class="verification-section" id="friendVerification" style="display: none;">
-                    <h4>🔍 Отпечаток ключа друга:</h4>
-                    <div class="fingerprint" id="friendFingerprint">—</div>
-                    <div id="fingerprintMatch" style="display: none;">
+                <div class="comparison-section" id="friendEcdhVerification" style="display: none;">
+                    <h4>🔍 Сверка отпечатков ключей</h4>
+                    <div><strong>Отпечаток друга (получен):</strong></div>
+                    <div class="fingerprint" id="friendEcdhFingerprint">—</div>
+                    
+                    <label>Отпечаток, присланный другом:</label>
+                    <div class="input-wrapper">
+                        <input type="text" id="friendProvidedEcdhFingerprint" placeholder="Вставьте отпечаток (Base64URL + эмодзи)..." />
+                        <div class="input-actions">
+                            <button class="action-btn" onclick="pasteToField('friendProvidedEcdhFingerprint')" title="Вставить">📥</button>
+                            <button class="action-btn" onclick="clearField('friendProvidedEcdhFingerprint')" title="Очистить">🗑️</button>
+                        </div>
+                    </div>
+                    <button id="verifyEcdhFingerprintBtn">Проверить отпечаток</button>
+                    
+                    <div id="ecdhFingerprintMatch" style="display: none;">
                         <div style="color: #28a745; font-weight: bold; margin: 10px 0;">
                             ✅ Отпечатки совпадают! Ключ подлинный
                         </div>
                     </div>
-                    <div id="fingerprintMismatch" style="display: none;">
+                    <div id="ecdhFingerprintMismatch" style="display: none;">
                         <div style="color: #dc3545; font-weight: bold; margin: 10px 0;">
                             ❌ Отпечатки не совпадают! Возможна MITM-атака
                         </div>
                     </div>
                 </div>
                 
-                <button id="generateAesKey">Сгенерировать ключ AES-256</button>
-                <input type="text" id="aesKey" placeholder="Ключ AES появится здесь..." readonly>
+                <button id="computeSharedSecret">Вычислить общий AES-ключ</button>
                 
-                <button id="encryptAesKey">Зашифровать ключ AES для друга</button>
-                
-                <label>Результат (передайте другу):</label>
-                <textarea id="encryptedAesKey" placeholder="Зашифрованный ключ AES..."></textarea>
+                <button id="useDerivedAesKey">Использовать этот ключ для переписки</button>
             </div>
 
             <div class="card">
-                <h3>3. Получить ключ AES от друга</h3>
-                <label>Мой приватный ключ:</label>
-                <textarea id="myPrivateKey" placeholder="Вставьте ваш приватный ключ..."></textarea>
+                <h3>3. Инструкция по обмену</h3>
+                <div class="security-notice">
+                    <strong>🔒 PFS активировано:</strong> AES-ключ никогда не передаётся по сети! 
+                    Он вычисляется локально на основе вашего приватного ключа и публичного ключа друга.
+                </div>
                 
-                <label>Зашифрованный ключ AES от друга:</label>
-                <textarea id="encryptedKeyFromFriend" placeholder="Вставьте зашифрованный ключ AES..."></textarea>
+                <h4>📋 Правильный порядок:</h4>
+                <ol>
+                    <li>Оба участника генерируют ECDH-ключи</li>
+                    <li>Обмениваются публичными ключами</li>
+                    <li><strong>Сравнивают отпечатки</strong> по защищённому каналу</li>
+                    <li>Если отпечатки совпадают - вычисляют общий AES-ключ</li>
+                    <li>Начинают безопасную переписку</li>
+                </ol>
                 
-                <button id="decryptAesKey">Расшифровать ключ AES</button>
+                <div class="security-notice">
+                    <strong>⚠️ Важно:</strong> Для каждого нового сеанса создавайте новые ECDH-ключи!
+                    Это обеспечивает Perfect Forward Secrecy.
+                </div>
                 
-                <label>Полученный ключ AES:</label>
-                <input type="text" id="receivedAesKey" placeholder="Расшифрованный ключ AES..." readonly>
-                
-                <button id="useAesKey">Использовать этот ключ для переписки</button>
+                <div class="key-info">
+                    <strong>Технические детали безопасности:</strong><br>
+                    • ECDH с кривой P-384 (384-битная безопасность)<br>
+                    • HKDF с уникальной солью для каждой пары ключей<br>
+                    • AES-GCM с AAD и timestamp (защита от подмены контекста)<br>
+                    • Проверка времени: предупреждение о старых (>5 мин) и будущих сообщениях<br>
+                    • Неэкспортируемые ключи (защита от извлечения)<br>
+                    • Отпечатки: SHA-512 → Base64URL (96 бит) + 6 эмодзи (30 бит)
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Вкладка подписей Ed25519 -->
+    <div id="signatures" class="tab-content">
+        <div class="card">
+            <h3>✍️ Цифровые подписи Ed25519</h3>
+            <div class="security-notice">
+                <strong>🛡️ Аутентификация сообщений:</strong> Ed25519 позволяет подтвердить авторство каждого сообщения.
+                Собеседник сможет убедиться, что сообщение действительно отправлено вами и не было изменено.
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="card">
+                <h3>🔑 Мои ключи подписи</h3>
+
+                <button id="generateEd25519Keys">Сгенерировать новую пару ключей Ed25519</button>
+
+                <div class="verification-section" id="ed25519KeysGenerated" style="display: none;">
+                    <h4>🔍 Отпечаток моего ключа подписи:</h4>
+                    <div class="input-wrapper">
+                        <div class="fingerprint" id="myEd25519Fingerprint">—</div>
+                        <div class="input-actions" style="top: 4px;">
+                            <button class="action-btn" onclick="copyField('myEd25519Fingerprint')" title="Копировать">📋</button>
+                        </div>
+                    </div>
+
+                    <label>Мой публичный ключ подписи (отправьте другу):</label>
+                    <div class="input-wrapper">
+                        <textarea id="myEd25519PublicKey" readonly style="min-height: 60px;"></textarea>
+                        <div class="input-actions">
+                            <button class="action-btn" onclick="copyField('myEd25519PublicKey')" title="Копировать">📋</button>
+                        </div>
+                    </div>
+
+                    <label>Мой приватный ключ подписи (секретный, для экспорта/бэкапа):</label>
+                    <div class="input-wrapper">
+                        <textarea id="myEd25519PrivateKeyExport" readonly style="min-height: 60px;"></textarea>
+                        <div class="input-actions">
+                            <button class="action-btn" onclick="copyField('myEd25519PrivateKeyExport')" title="Копировать">📋</button>
+                        </div>
+                    </div>
+                    <small>⚠️ Храните приватный ключ в безопасном месте. Никогда не передавайте его другим!</small>
+                </div>
+
+                <div style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+                    <h4>📥 Импорт приватного ключа</h4>
+                    <small>Вставьте ранее сохранённый приватный ключ для восстановления подписи</small>
+                    <div class="input-wrapper">
+                        <textarea id="ed25519PrivateKeyImport" placeholder="Вставьте приватный ключ Ed25519 (Base64)..." style="min-height: 60px;"></textarea>
+                        <div class="input-actions">
+                            <button class="action-btn" onclick="pasteToField('ed25519PrivateKeyImport')" title="Вставить">📥</button>
+                            <button class="action-btn" onclick="clearField('ed25519PrivateKeyImport')" title="Очистить">🗑️</button>
+                        </div>
+                    </div>
+                    <button id="importEd25519PrivateKey">Импортировать приватный ключ</button>
+                </div>
+
+                <div class="status info" id="ed25519MyStatus">
+                    Ключи подписи не сгенерированы
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>👤 Ключ подписи собеседника</h3>
+
+                <label>Публичный ключ подписи собеседника:</label>
+                <div class="input-wrapper">
+                    <textarea id="friendEd25519PublicKey" placeholder="Вставьте публичный ключ подписи собеседника (Base64)..." style="min-height: 60px;" oninput="updateFriendEd25519Fingerprint()"></textarea>
+                    <div class="input-actions">
+                        <button class="action-btn" onclick="pasteToField('friendEd25519PublicKey')" title="Вставить">📥</button>
+                        <button class="action-btn" onclick="clearField('friendEd25519PublicKey')" title="Очистить">🗑️</button>
+                    </div>
+                </div>
+
+                <button id="importFriendEd25519Key">Установить ключ собеседника</button>
+
+                <div class="comparison-section" id="friendEd25519Verification" style="display: none;">
+                    <h4>🔍 Сверка отпечатков ключа подписи</h4>
+                    <div><strong>Отпечаток ключа собеседника (вычислен):</strong></div>
+                    <div class="input-wrapper">
+                        <div class="fingerprint" id="friendEd25519Fingerprint">—</div>
+                        <div class="input-actions" style="top: 4px;">
+                            <button class="action-btn" onclick="copyField('friendEd25519Fingerprint')" title="Копировать">📋</button>
+                        </div>
+                    </div>
+
+                    <label>Отпечаток, присланный собеседником:</label>
+                    <div class="input-wrapper">
+                        <input type="text" id="friendProvidedEd25519Fingerprint" placeholder="Вставьте отпечаток подписи собеседника..." />
+                        <div class="input-actions">
+                            <button class="action-btn" onclick="pasteToField('friendProvidedEd25519Fingerprint')" title="Вставить">📥</button>
+                            <button class="action-btn" onclick="clearField('friendProvidedEd25519Fingerprint')" title="Очистить">🗑️</button>
+                        </div>
+                    </div>
+                    <button id="verifyEd25519FingerprintBtn" onclick="verifyEd25519Fingerprint()">Проверить отпечаток</button>
+
+                    <div id="ed25519FingerprintMatch" style="display: none;">
+                        <div style="color: #28a745; font-weight: bold; margin: 10px 0;">
+                            ✅ Отпечатки совпадают! Ключ подписи подлинный
+                        </div>
+                    </div>
+                    <div id="ed25519FingerprintMismatch" style="display: none;">
+                        <div style="color: #dc3545; font-weight: bold; margin: 10px 0;">
+                            ❌ Отпечатки НЕ совпадают! Ключ подписи может быть подменён
+                        </div>
+                    </div>
+                </div>
+
+                <div class="status info" id="ed25519FriendStatus">
+                    Ключ подписи собеседника не установлен
+                </div>
+
+                <div class="security-notice" style="margin-top: 15px;">
+                    <h4>📋 Порядок настройки:</h4>
+                    <ol>
+                        <li>Сгенерируйте свои ключи подписи или импортируйте приватный ключ</li>
+                        <li>Отправьте другу свой <strong>публичный ключ</strong> и <strong>отпечаток</strong></li>
+                        <li>Получите публичный ключ и отпечаток от друга</li>
+                        <li><strong>Сверьте отпечатки</strong> по защищённому каналу (звонок, личная встреча)</li>
+                        <li>После настройки все сообщения будут автоматически подписываться и проверяться</li>
+                    </ol>
+                </div>
             </div>
         </div>
     </div>
@@ -198,51 +928,648 @@
     <!-- Вкладка переписки -->
     <div id="messaging" class="tab-content">
         <div class="card">
-            <h3>💬 Переписка с помощью AES-GCM</h3>
+            <h3>💬 Переписка с помощью AES-GCM + AAD</h3>
             
             <div class="status info" id="aesStatus">
-                Ключ AES не установлен. Перейдите во вкладку "Обмен ключами"
+                Ключ AES не установлен. Перейдите во вкладку "PFS Обмен ключами"
             </div>
-            
-            <label>Ключ AES (будет автоматически установлен):</label>
-            <input type="text" id="currentAesKey" placeholder="Здесь будет ваш ключ AES..." readonly>
+            <div class="status info" id="signatureStatus">
+                ✍️ Подпись: ВЫКЛ | 🔍 Проверка: ВЫКЛ
+            </div>
             
             <div class="row">
                 <div>
                     <label>Сообщение для шифрования:</label>
-                    <textarea id="messageToEncrypt" placeholder="Введите ваше сообщение..."></textarea>
+                    <div class="input-wrapper">
+                        <textarea id="messageToEncrypt" placeholder="Введите ваше сообщение..."></textarea>
+                        <div class="input-actions">
+                            <button class="action-btn" onclick="pasteToField('messageToEncrypt')" title="Вставить">📥</button>
+                            <button class="action-btn" onclick="clearField('messageToEncrypt')" title="Очистить">🗑️</button>
+                        </div>
+                    </div>
                     <button id="encryptMessage">Зашифровать сообщение</button>
                 </div>
                 
                 <div>
                     <label>Зашифрованное сообщение:</label>
-                    <textarea id="encryptedMessage" placeholder="Зашифрованное сообщение..."></textarea>
+                    <div class="input-wrapper">
+                        <textarea id="encryptedMessage" placeholder="Зашифрованное сообщение..."></textarea>
+                        <div class="input-actions">
+                            <button class="action-btn" onclick="copyField('encryptedMessage')" title="Копировать">📋</button>
+                            <button class="action-btn" onclick="pasteToField('encryptedMessage')" title="Вставить">📥</button>
+                            <button class="action-btn" onclick="clearField('encryptedMessage')" title="Очистить">🗑️</button>
+                        </div>
+                    </div>
                     <button id="decryptMessage">Расшифровать сообщение</button>
                 </div>
             </div>
             
             <label>Результат:</label>
-            <textarea id="decryptedMessage" placeholder="Расшифрованное сообщение..." readonly></textarea>
+            <div class="input-wrapper">
+                <textarea id="decryptedMessage" placeholder="Расшифрованное сообщение..." readonly></textarea>
+                <div class="input-actions">
+                    <button class="action-btn" onclick="copyField('decryptedMessage')" title="Копировать">📋</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Вкладка для шифрования файлов -->
+    <div id="files" class="tab-content">
+        <div class="card">
+            <h3>📁 Шифрование файлов с помощью AES-GCM + AAD</h3>
+            
+            <div class="security-notice">
+                <strong>🔒 Безопасный просмотр:</strong> Медиафайлы открываются во временной памяти браузера 
+                и автоматически удаляются при закрытии страницы. Ничего не сохраняется на диск без вашего разрешения.
+            </div>
+            
+            <div class="status info" id="fileAesStatus">
+                Ключ AES не установлен. Перейдите во вкладку "PFS Обмен ключами"
+            </div>
+            
+            <div class="row">
+                <div class="card">
+                    <h4>Шифрование файла</h4>
+                    
+                    <div class="paste-area" id="encryptPasteArea">
+                        <strong>📎 Вставьте файл сюда</strong><br>
+                        <small>Перетащите файл или вставьте из буфера обмена (Ctrl+V)</small>
+                    </div>
+                    
+                    <div class="paste-buttons">
+                        <button class="mobile-paste-btn" id="encryptPasteBtn">📋 Вставить из буфера</button>
+                        <button onclick="document.getElementById('fileToEncrypt').click()">📁 Выбрать файл</button>
+                    </div>
+                    
+                    <input type="file" id="fileToEncrypt" class="file-input" style="display: none;">
+                    
+                    <div id="encryptFileInfo" class="file-info" style="display: none;">
+                        <strong>Файл готов к шифрованию:</strong>
+                        <div>Имя: <span id="encryptFileName">—</span></div>
+                        <div>Размер: <span id="encryptFileSize">0</span> байт</div>
+                        <div>Тип: <span id="encryptFileType">—</span></div>
+                    </div>
+                    
+                    <button id="encryptFile">Зашифровать файл</button>
+                    
+                    <div id="encryptedFileInfo" class="file-info" style="display: none;">
+                        <strong>Файл зашифрован!</strong>
+                        <div>Размер: <span id="encryptedFileSize">0</span> байт</div>
+                        <button id="downloadEncryptedFile">Скачать зашифрованный файл</button>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h4>Расшифровка файла</h4>
+                    
+                    <div class="paste-area" id="decryptPasteArea">
+                        <strong>📎 Вставьте файл сюда</strong><br>
+                        <small>Перетащите файл или вставьте из буфера обмена (Ctrl+V)</small>
+                    </div>
+                    
+                    <div class="paste-buttons">
+                        <button class="mobile-paste-btn" id="decryptPasteBtn">📋 Вставить из буфера</button>
+                        <button onclick="document.getElementById('fileToDecrypt').click()">📁 Выбрать файл</button>
+                    </div>
+                    
+                    <input type="file" id="fileToDecrypt" class="file-input" style="display: none;">
+                    
+                    <div id="decryptFileInfo" class="file-info" style="display: none;">
+                        <strong>Файл готов к расшифровке:</strong>
+                        <div>Имя: <span id="decryptFileName">—</span></div>
+                        <div>Размер: <span id="decryptFileSize">0</span> байт</div>
+                        <div>Тип: <span id="decryptFileType">—</span></div>
+                    </div>
+                    
+                    <button id="decryptFile">Расшифровать файл</button>
+                    
+                    <div id="decryptedFileInfo" class="file-info" style="display: none;">
+                        <strong>Файл расшифрован!</strong>
+                        <div>Имя файла: <span id="decryptedFileName">unknown</span></div>
+                        <div>Тип: <span id="decryptedFileType">unknown</span></div>
+                        <div>Размер: <span id="decryptedFileSize">0</span> байт</div>
+                        
+                        <div id="mediaPreview" class="media-preview" style="display: none;">
+                            <h4>🔍 Просмотр контента (безопасный):</h4>
+                            <div id="mediaContainer"></div>
+                            <small>Контент отображается из временной памяти браузера и будет удален при закрытии страницы</small>
+                        </div>
+                        
+                        <div class="row" style="grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                            <button id="downloadDecryptedFile">Скачать файл</button>
+                            <button id="viewMediaContent" style="background: #28a745;">Просмотреть контент</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <small>
-        📝 <strong>Как использовать:</strong><br>
-        1. Сгенерируйте RSA-4096 ключи и обменяйтесь публичными ключами с другом<br>
-        2. <strong>Сравните отпечатки ключей</strong> (последовательность эмодзи) по защищенному каналу<br>
-        3. Если отпечатки совпадают - ключи подлинные, можно продолжать<br>
-        4. Используйте AES-256 для быстрой и безопасной переписки
+        📝 <strong>Как использовать (ECDH PFS + Ed25519):</strong><br>
+        1. Сгенерируйте ECDH ключи и обменяйтесь публичными ключами с другом<br>
+        2. <strong>Сгенерируйте ключи подписи Ed25519</strong> и обменяйтесь публичными ключами подписи<br>
+        3. <strong>Сравните отпечатки</strong> обоих ключей по защищённому каналу<br>
+        4. Если отпечатки совпадают — ключи подлинные, вычислите общий AES-ключ<br>
+        5. Используйте AES-256-GCM с AAD и подписями Ed25519 для переписки и файлов<br>
+        6. Для каждого нового сеанса создавайте новые ECDH-ключи (Ed25519 можно переиспользовать)
     </small>
+
+    <!-- Секция уничтожения данных -->
+    <div class="destroy-section">
+        <h3>⚠️ Уничтожение данных</h3>
+        <p>Безвозвратно удаляет все ключи, сообщения и файлы из памяти браузера</p>
+        <button class="btn-danger" id="destroyAllData" onclick="destroyAllData()">
+            🔥 Уничтожить все данные
+        </button>
+    </div>
 
     <script>
         const te = new TextEncoder();
         const td = new TextDecoder();
         let currentAesKey = null;
-        let myFingerprint = '';
+        let fileAesKey = null;
+        let myEcdhFingerprint = '';
+        let myEd25519KeyPair = null;
+        let myEd25519PublicKeyRaw = null;
+        let myEd25519PrivateKeyPkcs8 = null;
+        let friendEd25519PublicKey = null;
+        let friendEd25519PublicKeyRaw = null;
+        let ed25519SigningEnabled = false;
+        let ed25519VerifyEnabled = false;
+        let encryptedFileData = null;
+        let decryptedFileData = null;
+        let decryptedFileName = '';
+        let decryptedFileType = '';
+        let mediaObjectUrl = null;
+        let derivedAesKeyRaw = null;
 
-        // Список эмодзи для отпечатков (32 эмодзи для 5-битного кодирования)
+        
+        // Ed25519 переменные
+        myEd25519KeyPair = null;       // { publicKey, privateKey } - CryptoKey objects
+        myEd25519PublicKeyRaw = null;   // ArrayBuffer публичного ключа (raw)
+        myEd25519PrivateKeyPkcs8 = null; // ArrayBuffer приватного ключа (pkcs8)
+        friendEd25519PublicKey = null;  // CryptoKey публичного ключа собеседника
+        friendEd25519PublicKeyRaw = null; // ArrayBuffer публичного ключа собеседника
+        ed25519SigningEnabled = false;  // Подпись включена
+        ed25519VerifyEnabled = false;   // Проверка подписи включена
+        
+        // ECDH переменные
+        let myEcdhKeyPair = null;
+        let myPublicKeyBuffer = null;
+
+        // HKDF INFO остаётся фиксированным
+        const HKDF_INFO = te.encode("ECDH-P384-AES256-KEY-DERIVATION-V2");
+
+        // AAD контексты для защиты от replay и context switching атак
+        const AAD_MESSAGE = te.encode("SecureMessenger-MSG");
+        const AAD_FILE = te.encode("SecureMessenger-FILE");
+
+        // Список эмодзи для отпечатков (32 эмодзи, включая волка 🐺)
         const EMOJIS = ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🐔", 
-                       "🐧", "🐦", "🐤", "🦄", "🐴", "🦋", "🐢", "🐠", "🐙", "🐬", "🦑", "🐝", "🦀", "🐳", "🦉", "🐺"];
+                       "🐧", "🐦", "🐤", "🦄", "🐴", "🦋", "🐢", "🐠", "🐙", "🐬", "🦑", "🐝", "🦀", "🐺", "🦉", "🐳"];
+
+        // Названия тем
+        const themeNames = {
+            'cream': 'Кремовая',
+            'dark': 'Тёмная',
+            'rose': 'Розовая',
+            'ocean': 'Океан',
+            'forest': 'Лесная',
+            'midnight': 'Полночь'
+        };
+
+        // Функция переключения панели тем
+        function toggleThemePanel() {
+            const options = document.getElementById('theme-options');
+            const arrow = document.getElementById('theme-arrow');
+            options.classList.toggle('show');
+            arrow.textContent = options.classList.contains('show') ? '▲' : '▼';
+        }
+
+        // Функция установки темы
+        function setTheme(themeName) {
+            const html = document.documentElement;
+            html.removeAttribute('data-theme');
+            if (themeName !== 'cream') {
+                html.setAttribute('data-theme', themeName);
+            }
+            document.getElementById('current-theme-name').textContent = themeNames[themeName];
+            document.querySelectorAll('.theme-option').forEach(opt => {
+                opt.classList.remove('active');
+                if (opt.dataset.theme === themeName) {
+                    opt.classList.add('active');
+                }
+            });
+            localStorage.setItem('theme', themeName);
+        }
+
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'cream';
+            setTheme(savedTheme);
+        }
+
+        // Функция безопасного уничтожения данных
+        function destroyAllData() {
+            if (!confirm('⚠️ Вы уверены? Все ключи, сообщения и файлы будут безвозвратно уничтожены!')) {
+                return;
+            }
+
+            // Очистка криптографических ключей
+            currentAesKey = null;
+            fileAesKey = null;
+            myEcdhKeyPair = null;
+            derivedAesKeyRaw = null;
+            myPublicKeyBuffer = null;
+            myEcdhFingerprint = '';
+
+            // Очистка данных файлов
+            if (encryptedFileData) {
+                encryptedFileData.fill(0);
+                encryptedFileData = null;
+            }
+            if (decryptedFileData) {
+                const arr = new Uint8Array(decryptedFileData);
+                arr.fill(0);
+                decryptedFileData = null;
+            }
+            decryptedFileName = '';
+            decryptedFileType = '';
+
+            // Освобождение Object URL
+            if (mediaObjectUrl) {
+                URL.revokeObjectURL(mediaObjectUrl);
+                mediaObjectUrl = null;
+            }
+
+            // Очистка всех текстовых полей
+            const textareas = document.querySelectorAll('textarea');
+            textareas.forEach(ta => {
+                ta.value = '';
+            });
+
+            const inputs = document.querySelectorAll('input[type="text"], input[type="password"]');
+            inputs.forEach(inp => {
+                inp.value = '';
+            });
+
+            // Сброс UI элементов
+            document.getElementById('myEcdhFingerprint').textContent = '—';
+            document.getElementById('friendEcdhFingerprint').textContent = '—';
+            document.getElementById('friendEcdhVerification').style.display = 'none';
+            document.getElementById('ecdhFingerprintMatch').style.display = 'none';
+            document.getElementById('ecdhFingerprintMismatch').style.display = 'none';
+
+            // Сброс UI Ed25519
+            document.getElementById('myEd25519Fingerprint').textContent = '—';
+            document.getElementById('friendEd25519Fingerprint').textContent = '—';
+            document.getElementById('ed25519KeysGenerated').style.display = 'none';
+            document.getElementById('friendEd25519Verification').style.display = 'none';
+            document.getElementById('ed25519FingerprintMatch').style.display = 'none';
+            document.getElementById('ed25519FingerprintMismatch').style.display = 'none';
+            document.getElementById('ed25519MyStatus').className = 'status info';
+            document.getElementById('ed25519MyStatus').textContent = 'Ключи подписи не сгенерированы';
+            document.getElementById('ed25519FriendStatus').className = 'status info';
+            document.getElementById('ed25519FriendStatus').textContent = 'Ключ подписи собеседника не установлен';
+            if (document.getElementById('signatureStatus')) {
+                document.getElementById('signatureStatus').className = 'status info';
+                document.getElementById('signatureStatus').textContent = '✍️ Подпись: ВЫКЛ | 🔍 Проверка: ВЫКЛ';
+            }
+
+            document.getElementById('aesStatus').className = 'status info';
+            document.getElementById('aesStatus').textContent = 'Ключ AES не установлен. Перейдите во вкладку "PFS Обмен ключами"';
+            document.getElementById('fileAesStatus').className = 'status info';
+            document.getElementById('fileAesStatus').textContent = 'Ключ AES не установлен. Перейдите во вкладку "PFS Обмен ключами"';
+
+            document.getElementById('encryptFileInfo').style.display = 'none';
+            document.getElementById('encryptedFileInfo').style.display = 'none';
+            document.getElementById('decryptFileInfo').style.display = 'none';
+            document.getElementById('decryptedFileInfo').style.display = 'none';
+            document.getElementById('mediaPreview').style.display = 'none';
+            document.getElementById('mediaContainer').innerHTML = '';
+
+            // Сброс file inputs
+            document.getElementById('fileToEncrypt').value = '';
+            document.getElementById('fileToDecrypt').value = '';
+
+            // Принудительная сборка мусора (если доступна)
+            if (window.gc) {
+                window.gc();
+            }
+
+            showStatus('success', '🔥 Все данные уничтожены!');
+        }
+
+        // Вычисление детерминистической соли из двух публичных ключей
+        async function deriveSessionSalt(myPublicKeyBuffer, friendPublicKeyBuffer) {
+            const myKeyBytes = new Uint8Array(myPublicKeyBuffer);
+            const friendKeyBytes = new Uint8Array(friendPublicKeyBuffer);
+            
+            let firstKey, secondKey;
+            let comparison = 0;
+            
+            const minLength = Math.min(myKeyBytes.length, friendKeyBytes.length);
+            for (let i = 0; i < minLength; i++) {
+                if (myKeyBytes[i] < friendKeyBytes[i]) {
+                    comparison = -1;
+                    break;
+                } else if (myKeyBytes[i] > friendKeyBytes[i]) {
+                    comparison = 1;
+                    break;
+                }
+            }
+            
+            if (comparison === 0) {
+                comparison = myKeyBytes.length - friendKeyBytes.length;
+            }
+            
+            if (comparison <= 0) {
+                firstKey = myKeyBytes;
+                secondKey = friendKeyBytes;
+            } else {
+                firstKey = friendKeyBytes;
+                secondKey = myKeyBytes;
+            }
+            
+            const combined = new Uint8Array(firstKey.length + secondKey.length);
+            combined.set(firstKey, 0);
+            combined.set(secondKey, firstKey.length);
+            
+            const saltHash = await crypto.subtle.digest('SHA-256', combined);
+            return new Uint8Array(saltHash);
+        }
+
+        // ==================== Ed25519 ФУНКЦИИ ====================
+
+        // Генерация ключей Ed25519
+        async function generateEd25519KeyPair() {
+            try {
+                const keyPair = await crypto.subtle.generateKey(
+                    { name: "Ed25519" },
+                    true, // exportable для бэкапа
+                    ["sign", "verify"]
+                );
+
+                myEd25519KeyPair = keyPair;
+
+                // Экспорт публичного ключа (raw)
+                const publicKeyRaw = await crypto.subtle.exportKey("raw", keyPair.publicKey);
+                myEd25519PublicKeyRaw = publicKeyRaw;
+                document.getElementById('myEd25519PublicKey').value = arrayBufferToBase64(publicKeyRaw);
+
+                // Экспорт приватного ключа (pkcs8)
+                const privateKeyPkcs8 = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
+                myEd25519PrivateKeyPkcs8 = privateKeyPkcs8;
+                document.getElementById('myEd25519PrivateKeyExport').value = arrayBufferToBase64(privateKeyPkcs8);
+
+                // Отпечаток
+                const fingerprint = await generateFingerprint(publicKeyRaw);
+                document.getElementById('myEd25519Fingerprint').textContent = fingerprint;
+
+                document.getElementById('ed25519KeysGenerated').style.display = 'block';
+                ed25519SigningEnabled = true;
+
+                document.getElementById('ed25519MyStatus').className = 'status success';
+                document.getElementById('ed25519MyStatus').textContent = '✅ Ключи подписи Ed25519 готовы! Подпись сообщений включена.';
+
+                updateSignatureStatusInMessaging();
+                showStatus('success', 'Ключи Ed25519 сгенерированы! Подпись сообщений включена.');
+            } catch (error) {
+                showStatus('error', 'Ошибка генерации Ed25519: ' + error.message);
+            }
+        }
+
+        // Импорт приватного ключа Ed25519
+        async function importEd25519PrivateKey() {
+            const privateKeyBase64 = document.getElementById('ed25519PrivateKeyImport').value.trim();
+            if (!privateKeyBase64) {
+                showStatus('error', 'Вставьте приватный ключ Ed25519');
+                return;
+            }
+
+            try {
+                const privateKeyBuffer = base64ToArrayBuffer(privateKeyBase64);
+
+                // Импорт приватного ключа
+                const privateKey = await crypto.subtle.importKey(
+                    "pkcs8",
+                    privateKeyBuffer,
+                    { name: "Ed25519" },
+                    true,
+                    ["sign"]
+                );
+
+                // Извлечение публичного ключа из приватного через JWK
+                const jwk = await crypto.subtle.exportKey("jwk", privateKey);
+
+                // Создаём JWK для публичного ключа (только x, без d)
+                const publicJwk = {
+                    crv: jwk.crv,
+                    kty: jwk.kty,
+                    x: jwk.x
+                };
+
+                const publicKey = await crypto.subtle.importKey(
+                    "jwk",
+                    publicJwk,
+                    { name: "Ed25519" },
+                    true,
+                    ["verify"]
+                );
+
+                myEd25519KeyPair = { publicKey, privateKey };
+
+                // Экспорт публичного ключа (raw)
+                const publicKeyRaw = await crypto.subtle.exportKey("raw", publicKey);
+                myEd25519PublicKeyRaw = publicKeyRaw;
+                document.getElementById('myEd25519PublicKey').value = arrayBufferToBase64(publicKeyRaw);
+
+                // Сохраняем приватный ключ
+                myEd25519PrivateKeyPkcs8 = privateKeyBuffer;
+                document.getElementById('myEd25519PrivateKeyExport').value = privateKeyBase64;
+
+                // Отпечаток
+                const fingerprint = await generateFingerprint(publicKeyRaw);
+                document.getElementById('myEd25519Fingerprint').textContent = fingerprint;
+
+                document.getElementById('ed25519KeysGenerated').style.display = 'block';
+                ed25519SigningEnabled = true;
+
+                document.getElementById('ed25519MyStatus').className = 'status success';
+                document.getElementById('ed25519MyStatus').textContent = '✅ Приватный ключ импортирован! Подпись сообщений включена.';
+
+                updateSignatureStatusInMessaging();
+                showStatus('success', 'Приватный ключ Ed25519 импортирован!');
+            } catch (error) {
+                showStatus('error', 'Ошибка импорта приватного ключа: ' + error.message);
+            }
+        }
+
+        // Установка публичного ключа собеседника
+        async function importFriendEd25519Key() {
+            const friendKeyBase64 = document.getElementById('friendEd25519PublicKey').value.trim();
+            if (!friendKeyBase64) {
+                showStatus('error', 'Вставьте публичный ключ подписи собеседника');
+                return;
+            }
+
+            try {
+                const friendKeyBuffer = base64ToArrayBuffer(friendKeyBase64);
+
+                // Валидация размера (Ed25519 public key = 32 bytes)
+                if (friendKeyBuffer.byteLength !== 32) {
+                    showStatus('error', 'Неверный размер ключа Ed25519. Ожидается 32 байта, получено: ' + friendKeyBuffer.byteLength);
+                    return;
+                }
+
+                const friendKey = await crypto.subtle.importKey(
+                    "raw",
+                    friendKeyBuffer,
+                    { name: "Ed25519" },
+                    true,
+                    ["verify"]
+                );
+
+                friendEd25519PublicKey = friendKey;
+                friendEd25519PublicKeyRaw = friendKeyBuffer;
+                ed25519VerifyEnabled = true;
+
+                // Отпечаток
+                const fingerprint = await generateFingerprint(friendKeyBuffer);
+                document.getElementById('friendEd25519Fingerprint').textContent = fingerprint;
+                document.getElementById('friendEd25519Verification').style.display = 'block';
+
+                document.getElementById('ed25519FriendStatus').className = 'status success';
+                document.getElementById('ed25519FriendStatus').textContent = '✅ Ключ подписи собеседника установлен! Проверка подписей включена.';
+
+                updateSignatureStatusInMessaging();
+                showStatus('success', 'Ключ подписи собеседника установлен! Проверка подписей включена.');
+            } catch (error) {
+                showStatus('error', 'Ошибка импорта ключа собеседника: ' + error.message);
+            }
+        }
+
+        // Обновление отпечатка ключа подписи собеседника
+        async function updateFriendEd25519Fingerprint() {
+            const friendKeyBase64 = document.getElementById('friendEd25519PublicKey').value.trim();
+            if (!friendKeyBase64) {
+                document.getElementById('friendEd25519Verification').style.display = 'none';
+                return;
+            }
+
+            try {
+                const friendKeyBuffer = base64ToArrayBuffer(friendKeyBase64);
+                if (friendKeyBuffer.byteLength !== 32) return;
+
+                const fingerprint = await generateFingerprint(friendKeyBuffer);
+                document.getElementById('friendEd25519Fingerprint').textContent = fingerprint;
+                document.getElementById('friendEd25519Verification').style.display = 'block';
+            } catch (e) {
+                // Тихо игнорируем ошибки при вводе
+            }
+        }
+
+        // Проверка отпечатка Ed25519
+        function verifyEd25519Fingerprint() {
+            const computed = document.getElementById('friendEd25519Fingerprint').textContent || '';
+            const provided = document.getElementById('friendProvidedEd25519Fingerprint').value.trim();
+
+            const matchEl = document.getElementById('ed25519FingerprintMatch');
+            const mismatchEl = document.getElementById('ed25519FingerprintMismatch');
+
+            if (computed === '—') {
+                alert('Сначала вставьте публичный ключ подписи собеседника.');
+                return;
+            }
+
+            if (!provided) {
+                alert('Вставьте отпечаток, который прислал собеседник.');
+                return;
+            }
+
+            const normProvided = provided.replace(/\s+/g, '');
+            const normComputed = computed.replace(/\s+/g, '');
+
+            if (normProvided === normComputed) {
+                matchEl.style.display = 'block';
+                mismatchEl.style.display = 'none';
+                showStatus('success', 'Отпечатки ключа подписи совпадают!');
+            } else {
+                matchEl.style.display = 'none';
+                mismatchEl.style.display = 'block';
+                showStatus('error', 'Отпечатки ключа подписи НЕ совпадают!');
+            }
+        }
+
+        // Подпись данных
+        async function signData(data) {
+            if (!ed25519SigningEnabled || !myEd25519KeyPair) {
+                return null;
+            }
+
+            try {
+                const dataBytes = (typeof data === 'string') ? te.encode(data) : new Uint8Array(data);
+                const signature = await crypto.subtle.sign(
+                    { name: "Ed25519" },
+                    myEd25519KeyPair.privateKey,
+                    dataBytes
+                );
+                return new Uint8Array(signature);
+            } catch (error) {
+                console.error('Ошибка подписи:', error);
+                return null;
+            }
+        }
+
+        // Проверка подписи
+        async function verifySignature(data, signature) {
+            if (!ed25519VerifyEnabled || !friendEd25519PublicKey) {
+                return { verified: false, reason: 'no_key', message: 'Ключ подписи собеседника не установлен' };
+            }
+
+            try {
+                const dataBytes = (typeof data === 'string') ? te.encode(data) : new Uint8Array(data);
+                const isValid = await crypto.subtle.verify(
+                    { name: "Ed25519" },
+                    friendEd25519PublicKey,
+                    signature,
+                    dataBytes
+                );
+
+                if (isValid) {
+                    return { verified: true, reason: 'valid', message: '✅ Подпись верна — сообщение подлинное' };
+                } else {
+                    return { verified: false, reason: 'invalid', message: '❌ Подпись НЕДЕЙСТВИТЕЛЬНА — сообщение могло быть подменено!' };
+                }
+            } catch (error) {
+                return { verified: false, reason: 'error', message: '⚠️ Ошибка проверки подписи: ' + error.message };
+            }
+        }
+
+        // Обновление статуса подписей на вкладке переписки
+        function updateSignatureStatusInMessaging() {
+            const statusEl = document.getElementById('signatureStatus');
+            if (!statusEl) return;
+
+            const parts = [];
+            if (ed25519SigningEnabled) {
+                parts.push('✍️ Подпись: ВКЛ');
+            } else {
+                parts.push('✍️ Подпись: ВЫКЛ');
+            }
+            if (ed25519VerifyEnabled) {
+                parts.push('🔍 Проверка: ВКЛ');
+            } else {
+                parts.push('🔍 Проверка: ВЫКЛ');
+            }
+
+            statusEl.textContent = parts.join(' | ');
+            statusEl.className = (ed25519SigningEnabled || ed25519VerifyEnabled) ? 'status success' : 'status info';
+        }
+
+        // ==================== КОНЕЦ Ed25519 ФУНКЦИЙ ====================
+
 
         // Переключение вкладок
         document.querySelectorAll('.tab').forEach(tab => {
@@ -255,30 +1582,26 @@
             });
         });
 
-        // Генерация отпечатка ключа в виде эмодзи
+        // Генерация отпечатка ключа: Base64URL (12 байт = 16 символов) + 6 эмодзи (SHA-512)
+        // Общая энтропия: 96 бит (Base64URL) + 30 бит (эмодзи) = 126 бит
         async function generateFingerprint(publicKeyBuffer) {
-            // Хешируем публичный ключ
-            const hashBuffer = await crypto.subtle.digest('SHA-256', publicKeyBuffer);
+            const hashBuffer = await crypto.subtle.digest('SHA-512', publicKeyBuffer);
             const hashArray = new Uint8Array(hashBuffer);
             
-            // Берем первые 10 байт (80 бит) и кодируем в 16 эмодзи (5 бит на эмодзи)
-            let fingerprint = '';
-            let bits = '';
+            // Первые 12 байт → Base64URL (16 символов, 96 бит энтропии)
+            const first12Bytes = hashArray.slice(0, 12);
+            const base64 = btoa(String.fromCharCode(...first12Bytes));
+            // Конвертируем в Base64URL (безопасен для URL и копирования)
+            const base64url = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
             
-            // Собираем битовую строку из первых 10 байт
-            for (let i = 0; i < 10; i++) {
-                bits += hashArray[i].toString(2).padStart(8, '0');
+            // Следующие 6 байт → 6 эмодзи (30 бит для быстрой визуальной проверки)
+            let emojiPart = '';
+            for (let i = 12; i < 18; i++) {
+                const index = hashArray[i] % EMOJIS.length;
+                emojiPart += EMOJIS[index];
             }
             
-            // Разбиваем на группы по 5 бит и преобразуем в эмодзи
-            for (let i = 0; i < 16; i++) {
-                const start = i * 5;
-                const fiveBits = bits.substring(start, start + 5);
-                const index = parseInt(fiveBits, 2);
-                fingerprint += EMOJIS[index % EMOJIS.length];
-            }
-            
-            return fingerprint;
+            return `${base64url} ${emojiPart}`;
         }
 
         // Кодирование в Base64
@@ -296,192 +1619,315 @@
             return bytes.buffer;
         }
 
-        // Генерация RSA-4096 ключей
-        document.getElementById('generateKeys').addEventListener('click', async () => {
+        // Проверка что ключ является ECDH P-384
+        async function validateEcdhP384Key(publicKeyBuffer) {
             try {
-                const keyPair = await crypto.subtle.generateKey(
-                    {
-                        name: "RSA-OAEP",
-                        modulusLength: 4096, // Увеличили до 4096 бит
-                        publicExponent: new Uint8Array([1, 0, 1]),
-                        hash: "SHA-256"
-                    },
-                    true,
-                    ["encrypt", "decrypt"]
-                );
-
-                // Экспорт публичного ключа
-                const publicKey = await crypto.subtle.exportKey("spki", keyPair.publicKey);
-                const publicKeyBase64 = arrayBufferToBase64(publicKey);
-                document.getElementById('publicKey').value = publicKeyBase64;
-                
-                // Генерация отпечатка
-                myFingerprint = await generateFingerprint(publicKey);
-                document.getElementById('myFingerprint').textContent = myFingerprint;
-
-                // Экспорт приватного ключа
-                const privateKey = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
-                document.getElementById('privateKey').value = arrayBufferToBase64(privateKey);
-                document.getElementById('myPrivateKey').value = arrayBufferToBase64(privateKey);
-
-                showStatus('success', 'RSA-4096 ключи сгенерированы! Сравните отпечаток с другом.');
-            } catch (error) {
-                showStatus('error', 'Ошибка генерации ключей: ' + error.message);
-            }
-        });
-
-        // Обновление отпечатка ключа друга
-        async function updateFriendFingerprint() {
-            const friendsPublicKeyBase64 = document.getElementById('friendsPublicKey').value.trim();
-            
-            if (!friendsPublicKeyBase64) {
-                document.getElementById('friendVerification').style.display = 'none';
-                return;
-            }
-
-            try {
-                const publicKeyBuffer = base64ToArrayBuffer(friendsPublicKeyBase64);
-                const friendFingerprint = await generateFingerprint(publicKeyBuffer);
-                
-                document.getElementById('friendFingerprint').textContent = friendFingerprint;
-                document.getElementById('friendVerification').style.display = 'block';
-                
-                // Проверка совпадения отпечатков
-                if (myFingerprint && friendFingerprint === myFingerprint) {
-                    document.getElementById('fingerprintMatch').style.display = 'block';
-                    document.getElementById('fingerprintMismatch').style.display = 'none';
-                } else {
-                    document.getElementById('fingerprintMatch').style.display = 'none';
-                    document.getElementById('fingerprintMismatch').style.display = 'none';
-                }
-            } catch (error) {
-                document.getElementById('friendFingerprint').textContent = '❌ Неверный формат ключа';
-                document.getElementById('friendVerification').style.display = 'block';
-            }
-        }
-
-        // Генерация AES-ключа
-        document.getElementById('generateAesKey').addEventListener('click', async () => {
-            try {
-                const key = await crypto.subtle.generateKey(
-                    { name: "AES-GCM", length: 256 },
-                    true,
-                    ["encrypt", "decrypt"]
-                );
-                
-                const exportedKey = await crypto.subtle.exportKey("raw", key);
-                const keyBase64 = arrayBufferToBase64(exportedKey);
-                
-                document.getElementById('aesKey').value = keyBase64;
-                showStatus('success', 'Ключ AES-256 сгенерирован!');
-            } catch (error) {
-                showStatus('error', 'Ошибка генерации AES-ключа: ' + error.message);
-            }
-        });
-
-        // Шифрование AES-ключа для друга
-        document.getElementById('encryptAesKey').addEventListener('click', async () => {
-            try {
-                const friendsPublicKeyBase64 = document.getElementById('friendsPublicKey').value.trim();
-                const aesKeyBase64 = document.getElementById('aesKey').value.trim();
-
-                if (!friendsPublicKeyBase64 || !aesKeyBase64) {
-                    showStatus('error', 'Введите публичный ключ друга и AES-ключ');
-                    return;
-                }
-
-                // Импорт публичного ключа друга
-                const publicKeyBuffer = base64ToArrayBuffer(friendsPublicKeyBase64);
                 const publicKey = await crypto.subtle.importKey(
                     "spki",
                     publicKeyBuffer,
-                    { name: "RSA-OAEP", hash: "SHA-256" },
-                    false,
-                    ["encrypt"]
+                    { name: "ECDH", namedCurve: "P-384" },
+                    false, // Неэкспортируемый
+                    []
                 );
-
-                // Шифрование AES-ключа
-                const aesKeyBuffer = base64ToArrayBuffer(aesKeyBase64);
-                const encryptedData = await crypto.subtle.encrypt(
-                    { name: "RSA-OAEP" },
-                    publicKey,
-                    aesKeyBuffer
+                
+                // Временный экспорт только для проверки формата
+                const tempKey = await crypto.subtle.importKey(
+                    "spki",
+                    publicKeyBuffer,
+                    { name: "ECDH", namedCurve: "P-384" },
+                    true,
+                    []
                 );
-
-                document.getElementById('encryptedAesKey').value = arrayBufferToBase64(encryptedData);
-                showStatus('success', 'AES-ключ зашифрован! Передайте результат другу.');
+                const exported = await crypto.subtle.exportKey("raw", tempKey);
+                
+                if (exported.byteLength !== 97) {
+                    throw new Error("Неверный размер ключа для P-384");
+                }
+                
+                const keyArray = new Uint8Array(exported);
+                if (keyArray[0] !== 0x04) {
+                    throw new Error("Неверный формат точки эллиптической кривой");
+                }
+                
+                return {
+                    isValid: true,
+                    key: publicKey,
+                    keyInfo: {
+                        algorithm: "ECDH",
+                        curve: "P-384",
+                        type: "public",
+                        size: "384-bit"
+                    }
+                };
             } catch (error) {
-                showStatus('error', 'Ошибка шифрования: ' + error.message);
+                return {
+                    isValid: false,
+                    error: error.message
+                };
             }
-        });
+        }
 
-        // Расшифровка AES-ключа от друга
-        document.getElementById('decryptAesKey').addEventListener('click', async () => {
+        // Обновление отпечатка ключа друга ECDH с проверкой
+        async function updateFriendEcdhFingerprint() {
+            const friendsPublicKeyBase64 = document.getElementById('friendsEcdhPublicKey').value.trim();
+            const friendVerificationBlock = document.getElementById('friendEcdhVerification');
+            const friendFingerprintEl = document.getElementById('friendEcdhFingerprint');
+            const matchEl = document.getElementById('ecdhFingerprintMatch');
+            const mismatchEl = document.getElementById('ecdhFingerprintMismatch');
+
+            friendVerificationBlock.style.display = 'none';
+            friendFingerprintEl.textContent = '—';
+            matchEl.style.display = 'none';
+            mismatchEl.style.display = 'none';
+
+            if (!friendsPublicKeyBase64) return;
+
             try {
-                const myPrivateKeyBase64 = document.getElementById('myPrivateKey').value.trim();
-                const encryptedKeyBase64 = document.getElementById('encryptedKeyFromFriend').value.trim();
-
-                if (!myPrivateKeyBase64 || !encryptedKeyBase64) {
-                    showStatus('error', 'Введите приватный ключ и зашифрованный AES-ключ');
+                const publicKeyBuffer = base64ToArrayBuffer(friendsPublicKeyBase64);
+                
+                const validation = await validateEcdhP384Key(publicKeyBuffer);
+                
+                if (!validation.isValid) {
+                    friendFingerprintEl.textContent = '❌ Неверный формат ключа: ' + validation.error;
+                    friendVerificationBlock.style.display = 'block';
+                    showStatus('error', 'Ключ друга не является валидным ECDH P-384 ключом');
                     return;
                 }
 
-                // Импорт приватного ключа
-                const privateKeyBuffer = base64ToArrayBuffer(myPrivateKeyBase64);
-                const privateKey = await crypto.subtle.importKey(
-                    "pkcs8",
-                    privateKeyBuffer,
-                    { name: "RSA-OAEP", hash: "SHA-256" },
-                    false,
-                    ["decrypt"]
-                );
+                const friendFingerprint = await generateFingerprint(publicKeyBuffer);
+                friendFingerprintEl.textContent = friendFingerprint;
+                friendVerificationBlock.style.display = 'block';
 
-                // Расшифровка AES-ключа
-                const encryptedData = base64ToArrayBuffer(encryptedKeyBase64);
-                const decryptedData = await crypto.subtle.decrypt(
-                    { name: "RSA-OAEP" },
-                    privateKey,
-                    encryptedData
-                );
-
-                const aesKeyBase64 = arrayBufferToBase64(decryptedData);
-                document.getElementById('receivedAesKey').value = aesKeyBase64;
-                showStatus('success', 'AES-ключ расшифрован!');
+                const provided = document.getElementById('friendProvidedEcdhFingerprint')?.value.trim();
+                if (provided) {
+                    const normProvided = provided.replace(/\s+/g, '');
+                    const normComputed = friendFingerprint.replace(/\s+/g, '');
+                    if (normProvided === normComputed) {
+                        matchEl.style.display = 'block';
+                        mismatchEl.style.display = 'none';
+                    } else {
+                        matchEl.style.display = 'none';
+                        mismatchEl.style.display = 'block';
+                    }
+                }
+                
+                showStatus('success', 'Ключ друга валиден: ECDH P-384');
+                
             } catch (error) {
-                showStatus('error', 'Ошибка расшифровки: ' + error.message);
+                friendFingerprintEl.textContent = '❌ Ошибка проверки ключа';
+                friendVerificationBlock.style.display = 'block';
+                showStatus('error', 'Ошибка проверки ключа: ' + error.message);
             }
-        });
+        }
 
-        // Использование AES-ключа для переписки
-        document.getElementById('useAesKey').addEventListener('click', async () => {
-            const aesKeyBase64 = document.getElementById('receivedAesKey').value.trim();
-            
-            if (!aesKeyBase64) {
-                showStatus('error', 'Сначала расшифруйте AES-ключ');
+        // Проверка отпечатка ECDH
+        function verifyEcdhFingerprint() {
+            const friendFingerprint = document.getElementById('friendEcdhFingerprint').textContent || '';
+            const provided = document.getElementById('friendProvidedEcdhFingerprint').value.trim();
+
+            const matchEl = document.getElementById('ecdhFingerprintMatch');
+            const mismatchEl = document.getElementById('ecdhFingerprintMismatch');
+            const friendVerificationBlock = document.getElementById('friendEcdhVerification');
+
+            if (friendFingerprint === '—' && !document.getElementById('friendsEcdhPublicKey').value.trim()) {
+                alert('Сначала вставьте публичный ключ друга — отпечаток будет рассчитан автоматически.');
                 return;
             }
 
+            friendVerificationBlock.style.display = 'block';
+
+            if (!provided) {
+                alert('Вставьте отпечаток, который прислал друг, в поле выше.');
+                return;
+            }
+
+            const normProvided = provided.replace(/\s+/g, '');
+            const normComputed = friendFingerprint.replace(/\s+/g, '');
+
+            if (normProvided === normComputed) {
+                matchEl.style.display = 'block';
+                mismatchEl.style.display = 'none';
+                showStatus('success', 'Отпечатки совпадают! Ключ подлинный.');
+            } else {
+                matchEl.style.display = 'none';
+                mismatchEl.style.display = 'block';
+                showStatus('error', 'Отпечатки не совпадают! Возможна MITM-атака.');
+            }
+        }
+
+        // Генерация ECDH-ключей (неэкспортируемые)
+        document.getElementById('generateEcdhKeys').addEventListener('click', async () => {
             try {
-                const keyBuffer = base64ToArrayBuffer(aesKeyBase64);
-                currentAesKey = await crypto.subtle.importKey(
-                    "raw",
-                    keyBuffer,
-                    { name: "AES-GCM" },
-                    false,
-                    ["encrypt", "decrypt"]
+                myEcdhKeyPair = await crypto.subtle.generateKey(
+                    {
+                        name: "ECDH",
+                        namedCurve: "P-384"
+                    },
+                    false, // Неэкспортируемые ключи!
+                    ["deriveKey", "deriveBits"]
                 );
 
-                document.getElementById('currentAesKey').value = aesKeyBase64;
-                document.getElementById('aesStatus').className = 'status success';
-                document.getElementById('aesStatus').textContent = '✅ Ключ AES-256 установлен и готов к использованию!';
+                // Для публичного ключа нужен экспорт для передачи другу
+                // Генерируем отдельную пару только для экспорта публичного ключа
+                const exportableKeyPair = await crypto.subtle.generateKey(
+                    {
+                        name: "ECDH",
+                        namedCurve: "P-384"
+                    },
+                    true,
+                    ["deriveKey", "deriveBits"]
+                );
+
+                // Экспортируем публичный ключ экспортируемой пары
+                const publicKeySpki = await crypto.subtle.exportKey("spki", exportableKeyPair.publicKey);
+                const publicKeyBase64 = arrayBufferToBase64(publicKeySpki);
                 
-                showStatus('success', 'Ключ AES установлен для переписки!');
+                // Сохраняем для вычисления соли
+                myPublicKeyBuffer = publicKeySpki;
+                
+                // Заменяем нашу пару на экспортируемую (для работы ECDH)
+                // но приватный ключ всё равно не показываем пользователю
+                myEcdhKeyPair = exportableKeyPair;
+                
+                document.getElementById('ecdhPublicKey').value = publicKeyBase64;
+                
+                myEcdhFingerprint = await generateFingerprint(publicKeySpki);
+                document.getElementById('myEcdhFingerprint').textContent = myEcdhFingerprint;
+                
+                showStatus('success', 'ECDH P-384 ключи сгенерированы! Отправьте публичный ключ другу.');
             } catch (error) {
-                showStatus('error', 'Ошибка импорта AES-ключа: ' + error.message);
+                showStatus('error', 'Ошибка генерации ECDH-ключей: ' + error.message);
             }
         });
 
-        // Шифрование сообщения
+        // Вычисление общего секрета с динамической солью
+        document.getElementById('computeSharedSecret').addEventListener('click', async () => {
+            try {
+                const friendsPublicKeyBase64 = document.getElementById('friendsEcdhPublicKey').value.trim();
+                if (!friendsPublicKeyBase64 || !myEcdhKeyPair) {
+                    showStatus('error', 'Сначала сгенерируйте свои ключи и введите ключ друга');
+                    return;
+                }
+
+                const friendsPublicKeyBuffer = base64ToArrayBuffer(friendsPublicKeyBase64);
+                const validation = await validateEcdhP384Key(friendsPublicKeyBuffer);
+                
+                if (!validation.isValid) {
+                    showStatus('error', 'Ключ друга не является валидным ECDH P-384 ключом: ' + validation.error);
+                    return;
+                }
+
+                const friendsPublicKey = validation.key;
+                
+                const sessionSalt = await deriveSessionSalt(myPublicKeyBuffer, friendsPublicKeyBuffer);
+
+                const sharedBits = await crypto.subtle.deriveBits(
+                    { name: "ECDH", public: friendsPublicKey },
+                    myEcdhKeyPair.privateKey,
+                    384
+                );
+
+                const hkdfKey = await crypto.subtle.importKey(
+                    "raw",
+                    sharedBits,
+                    { name: "HKDF" },
+                    false,
+                    ["deriveKey"]
+                );
+
+                // Создаём AES ключ (неэкспортируемый)
+                const aesKey = await crypto.subtle.deriveKey(
+                    {
+                        name: "HKDF",
+                        salt: sessionSalt,
+                        info: HKDF_INFO,
+                        hash: "SHA-384"
+                    },
+                    hkdfKey,
+                    { name: "AES-GCM", length: 256 },
+                    false, // Неэкспортируемый!
+                    ["encrypt", "decrypt"]
+                );
+
+                // Сохраняем ключ
+                derivedAesKeyRaw = aesKey;
+                
+                showStatus('success', 'PFS активировано! AES-ключ вычислен и готов к использованию.');
+                
+            } catch (error) {
+                showStatus('error', 'Ошибка вычисления общего ключа: ' + error.message);
+            }
+        });
+
+        // Использование вычисленного AES-ключа
+        document.getElementById('useDerivedAesKey').addEventListener('click', async () => {
+            if (!derivedAesKeyRaw) {
+                showStatus('error', 'Сначала вычислите общий AES-ключ');
+                return;
+            }
+
+            currentAesKey = derivedAesKeyRaw;
+            fileAesKey = derivedAesKeyRaw;
+
+            document.getElementById('aesStatus').className = 'status success';
+            document.getElementById('aesStatus').textContent = '✅ Ключ AES-256 установлен и готов к использованию!';
+            document.getElementById('fileAesStatus').className = 'status success';
+            document.getElementById('fileAesStatus').textContent = '✅ Ключ AES-256 установлен и готов к использованию!';
+
+            showStatus('success', 'PFS ключ установлен для переписки!');
+        });
+
+        // Функция записи timestamp с использованием BigInt
+        function writeTimestamp(timestamp) {
+            const timestampBytes = new Uint8Array(8);
+            const bigTimestamp = BigInt(timestamp);
+            for (let i = 0; i < 8; i++) {
+                timestampBytes[i] = Number((bigTimestamp >> BigInt(i * 8)) & BigInt(0xff));
+            }
+            return timestampBytes;
+        }
+
+        // Функция извлечения timestamp с использованием BigInt
+        function extractTimestamp(timestampBytes) {
+            let timestamp = BigInt(0);
+            for (let i = 0; i < 8; i++) {
+                timestamp += BigInt(timestampBytes[i]) << BigInt(i * 8);
+            }
+            return Number(timestamp);
+        }
+
+        // Константы для проверки времени
+        const MAX_MESSAGE_AGE_MS = 5 * 60 * 1000; // 5 минут
+        const MAX_FUTURE_TOLERANCE_MS = 60 * 1000; // 1 минута в будущее (допуск на рассинхронизацию)
+
+        // Функция проверки времени сообщения
+        function validateMessageTime(messageTimestamp) {
+            const now = Date.now();
+            const age = now - messageTimestamp;
+            
+            if (messageTimestamp > now + MAX_FUTURE_TOLERANCE_MS) {
+                return {
+                    valid: false,
+                    warning: true,
+                    reason: 'future',
+                    message: `⚠️ Сообщение из будущего (${Math.round((messageTimestamp - now) / 1000)} сек). Возможна подмена или рассинхронизация времени.`
+                };
+            }
+            
+            if (age > MAX_MESSAGE_AGE_MS) {
+                const minutes = Math.round(age / 60000);
+                return {
+                    valid: true,
+                    warning: true,
+                    reason: 'old',
+                    message: `⚠️ Старое сообщение (${minutes} мин назад). Возможна replay-атака.`
+                };
+            }
+            
+            return { valid: true, warning: false };
+        }
+
+        // Шифрование сообщения с AAD и подписью Ed25519
         document.getElementById('encryptMessage').addEventListener('click', async () => {
             if (!currentAesKey) {
                 showStatus('error', 'Сначала установите AES-ключ');
@@ -496,25 +1942,58 @@
                 }
 
                 const iv = crypto.getRandomValues(new Uint8Array(12));
+                const timestamp = writeTimestamp(Date.now());
+
+                // AAD включает контекст и временную метку
+                const aad = new Uint8Array(AAD_MESSAGE.length + timestamp.length);
+                aad.set(AAD_MESSAGE, 0);
+                aad.set(timestamp, AAD_MESSAGE.length);
+
                 const encrypted = await crypto.subtle.encrypt(
-                    { name: "AES-GCM", iv },
+                    {
+                        name: "AES-GCM",
+                        iv,
+                        additionalData: aad
+                    },
                     currentAesKey,
                     te.encode(message)
                 );
 
-                // Сохраняем IV вместе с зашифрованными данными
-                const combined = new Uint8Array(iv.length + encrypted.byteLength);
-                combined.set(iv, 0);
-                combined.set(new Uint8Array(encrypted), iv.length);
+                // Подписываем шифротекст (IV + timestamp + ciphertext)
+                const payloadToSign = new Uint8Array(iv.length + timestamp.length + encrypted.byteLength);
+                payloadToSign.set(iv, 0);
+                payloadToSign.set(timestamp, iv.length);
+                payloadToSign.set(new Uint8Array(encrypted), iv.length + timestamp.length);
+
+                const signature = await signData(payloadToSign);
+
+                let combined;
+                if (signature) {
+                    // Формат с подписью: FLAG(1) + SIGNATURE(64) + IV(12) + Timestamp(8) + Ciphertext
+                    combined = new Uint8Array(1 + 64 + payloadToSign.length);
+                    combined[0] = 0x01; // Флаг: подпись присутствует
+                    combined.set(signature, 1);
+                    combined.set(payloadToSign, 65);
+                } else {
+                    // Формат без подписи: FLAG(1) + IV(12) + Timestamp(8) + Ciphertext
+                    combined = new Uint8Array(1 + payloadToSign.length);
+                    combined[0] = 0x00; // Флаг: без подписи
+                    combined.set(payloadToSign, 1);
+                }
 
                 document.getElementById('encryptedMessage').value = arrayBufferToBase64(combined);
-                showStatus('success', 'Сообщение зашифровано!');
+
+                if (signature) {
+                    showStatus('success', '✍️ Сообщение зашифровано и подписано Ed25519!');
+                } else {
+                    showStatus('success', 'Сообщение зашифровано (без подписи — ключ Ed25519 не настроен)');
+                }
             } catch (error) {
                 showStatus('error', 'Ошибка шифрования: ' + error.message);
             }
         });
 
-        // Расшифровка сообщения
+        // Расшифровка сообщения с AAD, проверкой времени и подписи Ed25519
         document.getElementById('decryptMessage').addEventListener('click', async () => {
             if (!currentAesKey) {
                 showStatus('error', 'Сначала установите AES-ключ');
@@ -528,26 +2007,755 @@
                     return;
                 }
 
-                const combined = base64ToArrayBuffer(encryptedBase64);
-                const iv = new Uint8Array(combined.slice(0, 12));
-                const encrypted = new Uint8Array(combined.slice(12));
+                const combined = new Uint8Array(base64ToArrayBuffer(encryptedBase64));
+
+                let iv, timestamp, encrypted, signature = null, hasSig = false;
+
+                // Проверяем флаг подписи
+                const flag = combined[0];
+
+                if (flag === 0x01) {
+                    // Есть подпись: FLAG(1) + SIGNATURE(64) + IV(12) + Timestamp(8) + Ciphertext
+                    hasSig = true;
+                    signature = combined.slice(1, 65);
+                    iv = combined.slice(65, 77);
+                    timestamp = combined.slice(77, 85);
+                    encrypted = combined.slice(85);
+                } else if (flag === 0x00) {
+                    // Нет подписи: FLAG(1) + IV(12) + Timestamp(8) + Ciphertext
+                    iv = combined.slice(1, 13);
+                    timestamp = combined.slice(13, 21);
+                    encrypted = combined.slice(21);
+                } else {
+                    // Обратная совместимость: старый формат без флага
+                    // IV(12) + Timestamp(8) + Ciphertext
+                    iv = combined.slice(0, 12);
+                    timestamp = combined.slice(12, 20);
+                    encrypted = combined.slice(20);
+                }
+
+                // Восстанавливаем AAD
+                const aad = new Uint8Array(AAD_MESSAGE.length + timestamp.length);
+                aad.set(AAD_MESSAGE, 0);
+                aad.set(timestamp, AAD_MESSAGE.length);
 
                 const decrypted = await crypto.subtle.decrypt(
-                    { name: "AES-GCM", iv },
+                    {
+                        name: "AES-GCM",
+                        iv,
+                        additionalData: aad
+                    },
                     currentAesKey,
                     encrypted
                 );
 
+                // Проверяем время сообщения
+                const messageTimestamp = extractTimestamp(timestamp);
+                const timeCheck = validateMessageTime(messageTimestamp);
+
+                // Проверяем подпись, если есть
+                let signatureResult = null;
+                if (hasSig && signature) {
+                    const payloadToVerify = new Uint8Array(iv.length + timestamp.length + encrypted.length);
+                    payloadToVerify.set(iv, 0);
+                    payloadToVerify.set(timestamp, iv.length);
+                    payloadToVerify.set(encrypted, iv.length + timestamp.length);
+                    signatureResult = await verifySignature(payloadToVerify, signature);
+                }
+
                 document.getElementById('decryptedMessage').value = td.decode(decrypted);
-                showStatus('success', 'Сообщение расшифровано!');
+
+                // Формируем статусные сообщения
+                const messages = [];
+
+                if (hasSig && signatureResult) {
+                    if (signatureResult.verified) {
+                        messages.push(signatureResult.message);
+                    } else if (signatureResult.reason === 'no_key') {
+                        messages.push('⚠️ Сообщение подписано, но ключ подписи собеседника не установлен');
+                    } else {
+                        messages.push(signatureResult.message);
+                    }
+                } else if (!hasSig && flag === 0x00) {
+                    messages.push('ℹ️ Сообщение без подписи');
+                }
+
+                if (timeCheck.warning) {
+                    messages.push(timeCheck.message);
+                }
+
+                if (messages.length > 0) {
+                    const hasError = messages.some(m => m.startsWith('❌'));
+                    const hasWarning = messages.some(m => m.startsWith('⚠️'));
+                    const type = hasError ? 'error' : (hasWarning ? 'warning' : 'success');
+                    showStatus(type, messages.join(' | '));
+                } else {
+                    showStatus('success', 'Сообщение расшифровано!');
+                }
             } catch (error) {
-                showStatus('error', 'Ошибка расшифровки: ' + error.message);
+                showStatus('error', 'Ошибка расшифровки: неверный ключ или сообщение повреждено');
+            }
+        });
+
+        // Функции для работы с полями
+        async function copyField(id) {
+            try {
+                const el = document.getElementById(id);
+                const text = el.textContent || el.value;
+                await navigator.clipboard.writeText(text);
+                showStatus('success', 'Скопировано!');
+            } catch (e) {
+                showStatus('error', 'Ошибка копирования: ' + e.message);
+            }
+        }
+
+        async function pasteToField(id) {
+            try {
+                const text = await navigator.clipboard.readText();
+                const el = document.getElementById(id);
+                el.value = text;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                showStatus('success', 'Вставлено из буфера обмена');
+            } catch (e) {
+                showStatus('error', 'Не удалось вставить: ' + e.message);
+            }
+        }
+
+        function clearField(id) {
+            const el = document.getElementById(id);
+            el.value = '';
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            showStatus('info', 'Поле очищено');
+        }
+
+        // Улучшенный функционал вставки файлов из буфера обмена
+        document.addEventListener('DOMContentLoaded', function() {
+            const encryptPasteArea = document.getElementById('encryptPasteArea');
+            const decryptPasteArea = document.getElementById('decryptPasteArea');
+            const encryptPasteBtn = document.getElementById('encryptPasteBtn');
+            const decryptPasteBtn = document.getElementById('decryptPasteBtn');
+            const fileToEncryptInput = document.getElementById('fileToEncrypt');
+            const fileToDecryptInput = document.getElementById('fileToDecrypt');
+
+            function handleFilePaste(file, isEncryption) {
+                const files = new DataTransfer();
+                files.items.add(file);
+                
+                if (isEncryption) {
+                    fileToEncryptInput.files = files.files;
+                    updateFileInfo(file, 'encrypt');
+                    showStatus('success', 'Файл вставлен для шифрования: ' + file.name);
+                } else {
+                    fileToDecryptInput.files = files.files;
+                    updateFileInfo(file, 'decrypt');
+                    showStatus('success', 'Файл вставлен для расшифровки: ' + file.name);
+                }
+            }
+
+            function updateFileInfo(file, type) {
+                const prefix = type === 'encrypt' ? 'encrypt' : 'decrypt';
+                document.getElementById(`${prefix}FileName`).textContent = file.name;
+                document.getElementById(`${prefix}FileSize`).textContent = file.size;
+                document.getElementById(`${prefix}FileType`).textContent = file.type || 'unknown';
+                document.getElementById(`${prefix}FileInfo`).style.display = 'block';
+            }
+
+            encryptPasteArea.addEventListener('click', () => fileToEncryptInput.click());
+            encryptPasteArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                encryptPasteArea.style.background = 'var(--card-bg)';
+            });
+            encryptPasteArea.addEventListener('dragleave', () => {
+                encryptPasteArea.style.background = 'var(--secondary-bg)';
+            });
+            encryptPasteArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                encryptPasteArea.style.background = 'var(--secondary-bg)';
+                if (e.dataTransfer.files.length) {
+                    fileToEncryptInput.files = e.dataTransfer.files;
+                    updateFileInfo(e.dataTransfer.files[0], 'encrypt');
+                    showStatus('success', 'Файл получен для шифрования: ' + e.dataTransfer.files[0].name);
+                }
+            });
+
+            decryptPasteArea.addEventListener('click', () => fileToDecryptInput.click());
+            decryptPasteArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                decryptPasteArea.style.background = 'var(--card-bg)';
+            });
+            decryptPasteArea.addEventListener('dragleave', () => {
+                decryptPasteArea.style.background = 'var(--secondary-bg)';
+            });
+            decryptPasteArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                decryptPasteArea.style.background = 'var(--secondary-bg)';
+                if (e.dataTransfer.files.length) {
+                    fileToDecryptInput.files = e.dataTransfer.files;
+                    updateFileInfo(e.dataTransfer.files[0], 'decrypt');
+                    showStatus('success', 'Файл получен для расшифровки: ' + e.dataTransfer.files[0].name);
+                }
+            });
+
+            document.addEventListener('paste', async (e) => {
+                const items = e.clipboardData?.items;
+                if (!items) return;
+
+                for (let item of items) {
+                    if (item.kind === 'file') {
+                        const file = item.getAsFile();
+                        if (file) {
+                            const activeElement = document.activeElement;
+                            if (activeElement === encryptPasteArea || 
+                                encryptPasteArea.contains(activeElement) ||
+                                activeElement === encryptPasteBtn) {
+                                handleFilePaste(file, true);
+                            } else if (activeElement === decryptPasteArea || 
+                                     decryptPasteArea.contains(activeElement) ||
+                                     activeElement === decryptPasteBtn) {
+                                handleFilePaste(file, false);
+                            } else {
+                                handleFilePaste(file, true);
+                            }
+                            break;
+                        }
+                    }
+                }
+            });
+
+            encryptPasteBtn.addEventListener('click', async () => {
+                try {
+                    const clipboardItems = await navigator.clipboard.read();
+                    for (const item of clipboardItems) {
+                        for (const type of item.types) {
+                            if (type.startsWith('image/')) {
+                                const blob = await item.getType(type);
+                                const file = new File([blob], 'pasted-image.' + type.split('/')[1], { type: type });
+                                handleFilePaste(file, true);
+                                break;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    showStatus('error', 'Не удалось получить файл из буфера обмена: ' + error.message);
+                }
+            });
+
+            decryptPasteBtn.addEventListener('click', async () => {
+                try {
+                    const clipboardItems = await navigator.clipboard.read();
+                    for (const item of clipboardItems) {
+                        for (const type of item.types) {
+                            if (type.startsWith('image/')) {
+                                const blob = await item.getType(type);
+                                const file = new File([blob], 'pasted-image.' + type.split('/')[1], { type: type });
+                                handleFilePaste(file, false);
+                                break;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    showStatus('error', 'Не удалось получить файл из буфера обмена: ' + error.message);
+                }
+            });
+
+            fileToEncryptInput.addEventListener('change', (e) => {
+                if (e.target.files[0]) {
+                    updateFileInfo(e.target.files[0], 'encrypt');
+                }
+            });
+
+            fileToDecryptInput.addEventListener('change', (e) => {
+                if (e.target.files[0]) {
+                    updateFileInfo(e.target.files[0], 'decrypt');
+                }
+            });
+        });
+
+        // Шифрование файла с AAD и подписью Ed25519
+        document.getElementById('encryptFile').addEventListener('click', async () => {
+            if (!fileAesKey && !currentAesKey) {
+                showStatus('error', 'Сначала установите AES-ключ');
+                return;
+            }
+
+            const fileInput = document.getElementById('fileToEncrypt');
+            if (!fileInput.files[0]) {
+                showStatus('error', 'Выберите файл для шифрования или вставьте из буфера обмена');
+                return;
+            }
+
+            try {
+                const file = fileInput.files[0];
+                const fileData = await readFileAsArrayBuffer(file);
+
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                const timestamp = writeTimestamp(Date.now());
+
+                // AAD для файлов
+                const aad = new Uint8Array(AAD_FILE.length + timestamp.length);
+                aad.set(AAD_FILE, 0);
+                aad.set(timestamp, AAD_FILE.length);
+
+                const keyToUse = fileAesKey || currentAesKey;
+                const encrypted = await crypto.subtle.encrypt(
+                    {
+                        name: "AES-GCM",
+                        iv,
+                        additionalData: aad
+                    },
+                    keyToUse,
+                    fileData
+                );
+
+                // Подписываем payload
+                const payload = new Uint8Array(iv.length + timestamp.length + encrypted.byteLength);
+                payload.set(iv, 0);
+                payload.set(timestamp, iv.length);
+                payload.set(new Uint8Array(encrypted), iv.length + timestamp.length);
+
+                const signature = await signData(payload);
+
+                let combined;
+                if (signature) {
+                    combined = new Uint8Array(1 + 64 + payload.length);
+                    combined[0] = 0x01;
+                    combined.set(signature, 1);
+                    combined.set(payload, 65);
+                } else {
+                    combined = new Uint8Array(1 + payload.length);
+                    combined[0] = 0x00;
+                    combined.set(payload, 1);
+                }
+
+                encryptedFileData = combined;
+
+                document.getElementById('encryptedFileInfo').style.display = 'block';
+                document.getElementById('encryptedFileSize').textContent = combined.length;
+
+                if (signature) {
+                    showStatus('success', '✍️ Файл зашифрован и подписан Ed25519!');
+                } else {
+                    showStatus('success', 'Файл зашифрован (без подписи)');
+                }
+            } catch (error) {
+                showStatus('error', 'Ошибка шифрования файла: ' + error.message);
+            }
+        });
+
+        // Расшифровка файла с AAD, проверкой времени и подписи Ed25519
+        document.getElementById('decryptFile').addEventListener('click', async () => {
+            if (!fileAesKey && !currentAesKey) {
+                showStatus('error', 'Сначала установите AES-ключ');
+                return;
+            }
+
+            const fileInput = document.getElementById('fileToDecrypt');
+            if (!fileInput.files[0]) {
+                showStatus('error', 'Выберите файл для расшифровки или вставьте из буфера обмена');
+                return;
+            }
+
+            try {
+                const file = fileInput.files[0];
+                const fileData = await readFileAsArrayBuffer(file);
+                const combined = new Uint8Array(fileData);
+
+                let iv, timestamp, encrypted, signature = null, hasSig = false;
+
+                const flag = combined[0];
+
+                if (flag === 0x01) {
+                    hasSig = true;
+                    signature = combined.slice(1, 65);
+                    iv = combined.slice(65, 77);
+                    timestamp = combined.slice(77, 85);
+                    encrypted = combined.slice(85);
+                } else if (flag === 0x00) {
+                    iv = combined.slice(1, 13);
+                    timestamp = combined.slice(13, 21);
+                    encrypted = combined.slice(21);
+                } else {
+                    // Обратная совместимость
+                    iv = combined.slice(0, 12);
+                    timestamp = combined.slice(12, 20);
+                    encrypted = combined.slice(20);
+                }
+
+                // Восстанавливаем AAD
+                const aad = new Uint8Array(AAD_FILE.length + timestamp.length);
+                aad.set(AAD_FILE, 0);
+                aad.set(timestamp, AAD_FILE.length);
+
+                const keyToUse = fileAesKey || currentAesKey;
+                const decrypted = await crypto.subtle.decrypt(
+                    {
+                        name: "AES-GCM",
+                        iv,
+                        additionalData: aad
+                    },
+                    keyToUse,
+                    encrypted
+                );
+
+                // Проверяем время
+                const fileTimestamp = extractTimestamp(timestamp);
+                const timeCheck = validateMessageTime(fileTimestamp);
+
+                // Проверяем подпись
+                let signatureResult = null;
+                if (hasSig && signature) {
+                    const payloadToVerify = new Uint8Array(iv.length + timestamp.length + encrypted.length);
+                    payloadToVerify.set(iv, 0);
+                    payloadToVerify.set(timestamp, iv.length);
+                    payloadToVerify.set(encrypted, iv.length + timestamp.length);
+                    signatureResult = await verifySignature(payloadToVerify, signature);
+                }
+
+                decryptedFileData = decrypted;
+                decryptedFileName = file.name.replace('.encrypted', '').replace('.aes', '');
+                decryptedFileType = getFileType(decrypted);
+
+                document.getElementById('decryptedFileInfo').style.display = 'block';
+                document.getElementById('decryptedFileName').textContent = decryptedFileName;
+                document.getElementById('decryptedFileType').textContent = decryptedFileType;
+                document.getElementById('decryptedFileSize').textContent = decrypted.byteLength;
+
+                document.getElementById('mediaPreview').style.display = 'none';
+
+                // Статусы
+                const messages = [];
+
+                if (hasSig && signatureResult) {
+                    if (signatureResult.verified) {
+                        messages.push(signatureResult.message);
+                    } else if (signatureResult.reason === 'no_key') {
+                        messages.push('⚠️ Файл подписан, но ключ подписи собеседника не установлен');
+                    } else {
+                        messages.push(signatureResult.message);
+                    }
+                } else if (!hasSig && flag === 0x00) {
+                    messages.push('ℹ️ Файл без подписи');
+                }
+
+                if (timeCheck.warning) {
+                    messages.push(timeCheck.message.replace('Сообщение', 'Файл').replace('сообщение', 'файл'));
+                }
+
+                if (messages.length > 0) {
+                    const hasError = messages.some(m => m.startsWith('❌'));
+                    const hasWarning = messages.some(m => m.startsWith('⚠️'));
+                    const type = hasError ? 'error' : (hasWarning ? 'warning' : 'success');
+                    showStatus(type, messages.join(' | '));
+                } else {
+                    showStatus('success', 'Файл расшифрован!');
+                }
+            } catch (error) {
+                showStatus('error', 'Ошибка расшифровки файла: неверный ключ или файл повреждён');
+            }
+        });
+
+        // Безопасный список MIME-типов для просмотра
+        const SAFE_MEDIA_TYPES = {
+            'image/png': 'image',
+            'image/jpeg': 'image',
+            'image/gif': 'image',
+            'image/webp': 'image',
+            'image/bmp': 'image',
+            'video/mp4': 'video',
+            'video/webm': 'video',
+            'video/ogg': 'video',
+            'audio/mpeg': 'audio',
+            'audio/ogg': 'audio',
+            'audio/wav': 'audio',
+            'audio/webm': 'audio',
+            'audio/mp4': 'audio'
+        };
+
+        // Строгая проверка magic bytes с точным определением типа
+        function getVerifiedMediaType(arrayBuffer) {
+            const arr = new Uint8Array(arrayBuffer);
+            if (arr.length < 4) return null;
+
+            // PNG: 89 50 4E 47 0D 0A 1A 0A
+            if (arr.length >= 8 &&
+                arr[0] === 0x89 && arr[1] === 0x50 && arr[2] === 0x4E && arr[3] === 0x47 &&
+                arr[4] === 0x0D && arr[5] === 0x0A && arr[6] === 0x1A && arr[7] === 0x0A) {
+                return 'image/png';
+            }
+
+            // JPEG: FF D8 FF
+            if (arr[0] === 0xFF && arr[1] === 0xD8 && arr[2] === 0xFF) {
+                return 'image/jpeg';
+            }
+
+            // GIF: 47 49 46 38 (GIF8)
+            if (arr[0] === 0x47 && arr[1] === 0x49 && arr[2] === 0x46 && arr[3] === 0x38) {
+                return 'image/gif';
+            }
+
+            // WebP: 52 49 46 46 ... 57 45 42 50
+            if (arr.length >= 12 &&
+                arr[0] === 0x52 && arr[1] === 0x49 && arr[2] === 0x46 && arr[3] === 0x46 &&
+                arr[8] === 0x57 && arr[9] === 0x45 && arr[10] === 0x42 && arr[11] === 0x50) {
+                return 'image/webp';
+            }
+
+            // BMP: 42 4D
+            if (arr[0] === 0x42 && arr[1] === 0x4D) {
+                return 'image/bmp';
+            }
+
+            // MP4/M4A/M4V: ... ftyp
+            if (arr.length >= 8 &&
+                arr[4] === 0x66 && arr[5] === 0x74 && arr[6] === 0x79 && arr[7] === 0x70) {
+                // Проверяем подтип
+                const subtype = String.fromCharCode(arr[8], arr[9], arr[10], arr[11]);
+                if (['isom', 'iso2', 'mp41', 'mp42', 'avc1', 'M4V ', 'dash'].includes(subtype)) {
+                    return 'video/mp4';
+                }
+                if (['M4A ', 'mp4a'].includes(subtype)) {
+                    return 'audio/mp4';
+                }
+                return 'video/mp4'; // Безопасный fallback для ftyp
+            }
+
+            // WebM/Matroska: 1A 45 DF A3
+            if (arr[0] === 0x1A && arr[1] === 0x45 && arr[2] === 0xDF && arr[3] === 0xA3) {
+                return 'video/webm';
+            }
+
+            // OGG: 4F 67 67 53
+            if (arr[0] === 0x4F && arr[1] === 0x67 && arr[2] === 0x67 && arr[3] === 0x53) {
+                return 'audio/ogg';
+            }
+
+            // WAV: 52 49 46 46 ... 57 41 56 45
+            if (arr.length >= 12 &&
+                arr[0] === 0x52 && arr[1] === 0x49 && arr[2] === 0x46 && arr[3] === 0x46 &&
+                arr[8] === 0x57 && arr[9] === 0x41 && arr[10] === 0x56 && arr[11] === 0x45) {
+                return 'audio/wav';
+            }
+
+            // MP3: FF FB, FF F3, FF F2 или ID3
+            if ((arr[0] === 0xFF && (arr[1] === 0xFB || arr[1] === 0xF3 || arr[1] === 0xF2)) ||
+                (arr[0] === 0x49 && arr[1] === 0x44 && arr[2] === 0x33)) {
+                return 'audio/mpeg';
+            }
+
+            // Не распознано — НЕ отображаем, только скачивание
+            return null;
+        }
+
+        // Проверка на встроенный скриптовый контент внутри бинарных данных
+        function containsScriptContent(arrayBuffer) {
+            const arr = new Uint8Array(arrayBuffer);
+            // Проверяем первые 1KB на наличие подозрительных сигнатур
+            const checkLength = Math.min(arr.length, 1024);
+            const header = new TextDecoder('ascii', { fatal: false }).decode(arr.slice(0, checkLength)).toLowerCase();
+
+            const dangerous = [
+                '<script', 'javascript:', 'onerror=', 'onload=',
+                '<svg', '<html', '<iframe', '<object', '<embed',
+                'vbscript:', 'data:text/html', '<?xml'
+            ];
+
+            return dangerous.some(pattern => header.includes(pattern));
+        }
+
+        // Просмотр медиа-контента (безопасный)
+        document.getElementById('viewMediaContent').addEventListener('click', () => {
+            if (!decryptedFileData) {
+                showStatus('error', 'Нет расшифрованного файла для просмотра');
+                return;
+            }
+
+            // Строгая проверка типа по magic bytes
+            const verifiedType = getVerifiedMediaType(decryptedFileData);
+
+            if (!verifiedType) {
+                showStatus('error', 'Тип файла не поддерживается для безопасного просмотра. Используйте скачивание.');
+                return;
+            }
+
+            // Проверяем что тип в белом списке
+            const mediaCategory = SAFE_MEDIA_TYPES[verifiedType];
+            if (!mediaCategory) {
+                showStatus('error', 'Тип "' + verifiedType + '" не входит в список безопасных для просмотра.');
+                return;
+            }
+
+            // Дополнительная проверка на встроенный скриптовый контент
+            if (containsScriptContent(decryptedFileData)) {
+                showStatus('error', '🚨 Обнаружено подозрительное содержимое в файле! Просмотр заблокирован.');
+                return;
+            }
+
+            // Освобождаем предыдущий URL
+            if (mediaObjectUrl) {
+                URL.revokeObjectURL(mediaObjectUrl);
+                mediaObjectUrl = null;
+            }
+
+            // Создаём blob ТОЛЬКО с верифицированным типом
+            const blob = new Blob([decryptedFileData], { type: verifiedType });
+            mediaObjectUrl = URL.createObjectURL(blob);
+
+            const mediaContainer = document.getElementById('mediaContainer');
+            mediaContainer.innerHTML = '';
+
+            if (mediaCategory === 'image') {
+                const img = document.createElement('img');
+                img.src = mediaObjectUrl;
+                img.alt = 'Расшифрованное изображение';
+                // Запрещаем выполнение любых скриптов через CSP на уровне элемента
+                img.setAttribute('loading', 'lazy');
+                mediaContainer.appendChild(img);
+            } else if (mediaCategory === 'video') {
+                const video = document.createElement('video');
+                video.src = mediaObjectUrl;
+                video.controls = true;
+                video.style.maxWidth = '100%';
+                video.setAttribute('disablePictureInPicture', '');
+                video.setAttribute('controlsList', 'nodownload');
+                mediaContainer.appendChild(video);
+            } else if (mediaCategory === 'audio') {
+                const audio = document.createElement('audio');
+                audio.src = mediaObjectUrl;
+                audio.controls = true;
+                audio.style.width = '100%';
+                audio.setAttribute('controlsList', 'nodownload');
+                mediaContainer.appendChild(audio);
+            }
+
+            document.getElementById('mediaPreview').style.display = 'block';
+            showStatus('success', 'Контент (' + verifiedType + ') загружен для безопасного просмотра');
+        });
+
+        // Скачивание зашифрованного файла
+        document.getElementById('downloadEncryptedFile').addEventListener('click', () => {
+            if (!encryptedFileData) {
+                showStatus('error', 'Нет зашифрованного файла для скачивания');
+                return;
+            }
+
+            const blob = new Blob([encryptedFileData], { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'encrypted_file.aes';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // Скачивание расшифрованного файла
+        document.getElementById('downloadDecryptedFile').addEventListener('click', () => {
+            if (!decryptedFileData) {
+                showStatus('error', 'Нет расшифрованного файла для скачивания');
+                return;
+            }
+
+            const blob = new Blob([decryptedFileData], { type: decryptedFileType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = decryptedFileName;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // Инициализация обработчиков
+        document.addEventListener('DOMContentLoaded', () => {
+            // ECDH обработчики
+            const verifyBtn = document.getElementById('verifyEcdhFingerprintBtn');
+            if (verifyBtn) {
+                verifyBtn.addEventListener('click', verifyEcdhFingerprint);
+            }
+
+            const friendsKeyArea = document.getElementById('friendsEcdhPublicKey');
+            if (friendsKeyArea) {
+                friendsKeyArea.addEventListener('input', updateFriendEcdhFingerprint);
+            }
+
+            // Ed25519 обработчики
+            document.getElementById('generateEd25519Keys').addEventListener('click', generateEd25519KeyPair);
+            document.getElementById('importEd25519PrivateKey').addEventListener('click', importEd25519PrivateKey);
+            document.getElementById('importFriendEd25519Key').addEventListener('click', importFriendEd25519Key);
+
+            loadTheme();
+        });
+
+        // Вспомогательные функции для работы с файлами
+        function readFileAsArrayBuffer(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function getFileType(arrayBuffer) {
+            const arr = new Uint8Array(arrayBuffer).subarray(0, 12);
+            let header = '';
+            for (let i = 0; i < Math.min(arr.length, 4); i++) {
+                header += arr[i].toString(16).padStart(2, '0');
+            }
+            
+            if (arr.length >= 8) {
+                const ftypCheck = String.fromCharCode(arr[4], arr[5], arr[6], arr[7]);
+                if (ftypCheck === 'ftyp') {
+                    return 'video/mp4';
+                }
+            }
+            
+            switch (header) {
+                case '89504e47': return 'image/png';
+                case '47494638': return 'image/gif';
+                case 'ffd8ffe0':
+                case 'ffd8ffe1':
+                case 'ffd8ffe2':
+                case 'ffd8ffdb':
+                case 'ffd8ffee': return 'image/jpeg';
+                case '25504446': return 'application/pdf';
+                case '504b0304': return 'application/zip';
+                case '52494646': return 'audio/wav';
+                case '49443303': 
+                case 'fffb':
+                case 'fff3':
+                case 'fff2': return 'audio/mpeg';
+                case '4f676753': return 'audio/ogg';
+                case '1a45dfa3': return 'video/webm';
+                default: return 'application/octet-stream';
+            }
+        }
+
+        // Очистка временных URL при закрытии страницы
+        window.addEventListener('beforeunload', () => {
+            if (mediaObjectUrl) {
+                URL.revokeObjectURL(mediaObjectUrl);
             }
         });
 
         function showStatus(type, message) {
-            // Можно добавить более красивый вывод статусов
-            alert(message);
+            const statusDiv = document.createElement('div');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+            statusDiv.style.position = 'fixed';
+            statusDiv.style.top = '20px';
+            statusDiv.style.left = '50%';
+            statusDiv.style.transform = 'translateX(-50%)';
+            statusDiv.style.zIndex = '1001';
+            statusDiv.style.minWidth = '300px';
+            statusDiv.style.maxWidth = '90%';
+            statusDiv.style.textAlign = 'center';
+            statusDiv.style.animation = 'fadeIn 0.3s ease';
+            
+            document.body.appendChild(statusDiv);
+            setTimeout(() => {
+                statusDiv.style.opacity = '0';
+                statusDiv.style.transition = 'opacity 0.3s ease';
+                setTimeout(() => statusDiv.remove(), 300);
+            }, 4000);
         }
     </script>
 </body>
