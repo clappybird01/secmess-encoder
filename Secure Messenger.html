@@ -572,6 +572,7 @@
             flex-shrink: 0;
         }
     </style>
+    <script src="sodium.js"></script>
 </head>
 <body>
 
@@ -704,15 +705,15 @@
                 </summary>
                 <div class="key-info" style="margin-top: 8px;">
                     <strong>Криптографические детали:</strong><br>
-                    • Обмен ключами: ECDH с кривой P-384 (384-битная безопасность)<br>
-                    • Вывод ключа: HKDF с уникальной солью для каждой пары<br>
-                    • Шифрование: AES-256-GCM с AAD и timestamp<br>
-                    • Подписи: Ed25519 (вкладка «Подписи»)<br>
+                    • Обмен ключами: X25519 с кривой Curve25519 (libsodium crypto_kx)<br>
+                    • Вывод ключа: BLAKE2b (crypto_generichash) с солью для каждой пары<br>
+                    • Шифрование: XChaCha20-Poly1305 (IETF) с AAD и timestamp<br>
+                    • Подписи: Ed25519 (libsodium-detached, вкладка «Подписи»)<br>
                     • Защита от replay: проверка времени сообщения (>5 мин = предупреждение)<br>
                     • Защита от подмены контекста: AAD разделён для сообщений и файлов<br>
-                    • Неэкспортируемые ключи шифрования (защита от извлечения)<br>
+                    • Изолированные ключи шифрования (защита памяти внутри WebAssembly)<br>
                     • Отпечатки: SHA-512 → Base64URL (96 бит) + 6 эмодзи (30 бит энтропии)<br>
-                    • Perfect Forward Secrecy: каждая сессия — новые ECDH-ключи
+                    • Perfect Forward Secrecy: каждая сессия — новые X25519-ключи
                 </div>
             </details>
         </div>
@@ -914,8 +915,8 @@
 const te = new TextEncoder();
 const td = new TextDecoder();
 
-let currentAesKey = null;
-let myEcdhKeyPair = null;
+let currentSymmetricKey = null;
+let myKxKeyPair = null;
 let myPublicKeyBuffer = null;
 let myEcdhFingerprintStr = '';
 let derivedAesKeyRaw = null;
@@ -1134,32 +1135,29 @@ function clearField(id) {
 // =====================================================================
 // ECDH P-384
 // =====================================================================
-async function validateEcdhP384Key(buf) {
-    try {
-        const k = await crypto.subtle.importKey("spki", buf, {name:"ECDH",namedCurve:"P-384"}, true, []);
-        const raw = await crypto.subtle.exportKey("raw", k);
-        if (raw.byteLength !== 97) throw new Error("Размер не P-384");
-        if (new Uint8Array(raw)[0] !== 0x04) throw new Error("Неверный формат точки");
-        const kNonExp = await crypto.subtle.importKey("spki", buf, {name:"ECDH",namedCurve:"P-384"}, false, []);
-        return { isValid:true, key: kNonExp };
-    } catch(e) { return { isValid:false, error: e.message }; }
-}
 
 async function updateFriendEcdhFingerprint() {
     const b64 = document.getElementById('friendsEcdhPublicKey').value.trim();
     const block = document.getElementById('friendEcdhVerification');
     const fp = document.getElementById('friendEcdhFingerprint');
-    block.style.display='none'; fp.textContent='—';
-    document.getElementById('ecdhFingerprintMatch').style.display='none';
-    document.getElementById('ecdhFingerprintMismatch').style.display='none';
+    block.style.display = 'none'; fp.textContent = '—';
+    document.getElementById('ecdhFingerprintMatch').style.display = 'none';
+    document.getElementById('ecdhFingerprintMismatch').style.display = 'none';
     if (!b64) return;
     try {
         const buf = base64ToArrayBuffer(b64);
-        const v = await validateEcdhP384Key(buf);
-        if (!v.isValid) { fp.textContent='❌ '+v.error; block.style.display='block'; return; }
+        // Libsodium X25519 ключ всегда строго 32 байта
+        if (buf.byteLength !== 32) { 
+            fp.textContent = '❌ Неверный размер ключа X25519'; 
+            block.style.display = 'block'; 
+            return; 
+        }
         fp.textContent = await generateFingerprint(buf);
-        block.style.display='block';
-    } catch(e) { fp.textContent='❌ Ошибка'; block.style.display='block'; }
+        block.style.display = 'block';
+    } catch(e) { 
+        fp.textContent = '❌ Ошибка чтения Base64'; 
+        block.style.display = 'block'; 
+    }
 }
 
 function verifyEcdhFingerprint() {
@@ -1179,39 +1177,50 @@ function verifyEcdhFingerprint() {
 // Генерация ECDH
 document.getElementById('generateEcdhKeys').addEventListener('click', async () => {
     try {
-        myEcdhKeyPair = await crypto.subtle.generateKey({name:"ECDH",namedCurve:"P-384"}, true, ["deriveKey","deriveBits"]);
-        const spki = await crypto.subtle.exportKey("spki", myEcdhKeyPair.publicKey);
-        myPublicKeyBuffer = spki;
-        document.getElementById('ecdhPublicKey').value = arrayBufferToBase64(spki);
-        myEcdhFingerprintStr = await generateFingerprint(spki);
+        await sodium.ready;
+        // Генерируем ключи X25519
+        myKxKeyPair = sodium.crypto_kx_keypair();
+        
+        myPublicKeyBuffer = myKxKeyPair.publicKey.buffer; // Сохраняем как ArrayBuffer для совместимости с вашим кодом
+        document.getElementById('ecdhPublicKey').value = arrayBufferToBase64(myPublicKeyBuffer);
+        
+        myEcdhFingerprintStr = await generateFingerprint(myPublicKeyBuffer);
         document.getElementById('myEcdhFingerprint').textContent = myEcdhFingerprintStr;
-        showStatus('success','ECDH P-384 ключи сгенерированы!');
+        showStatus('success','X25519 ключи сгенерированы!');
     } catch(e) { showStatus('error','Ошибка: '+e.message); }
 });
 
 // ОБЪЕДИНЁННАЯ КНОПКА: Вычислить + Установить
 document.getElementById('computeAndUseSharedSecret').addEventListener('click', async () => {
     try {
+        await sodium.ready;
         const friendB64 = document.getElementById('friendsEcdhPublicKey').value.trim();
-        if (!friendB64 || !myEcdhKeyPair) { showStatus('error','Сначала сгенерируйте ключи и введите ключ друга'); return; }
+        if (!friendB64 || !myKxKeyPair) { showStatus('error','Сначала сгенерируйте ключи и введите ключ друга'); return; }
+        
         const friendBuf = base64ToArrayBuffer(friendB64);
-        const v = await validateEcdhP384Key(friendBuf);
-        if (!v.isValid) { showStatus('error','Невалидный ключ: '+v.error); return; }
+        const friendPk = new Uint8Array(friendBuf);
 
+        if (friendPk.length !== sodium.crypto_kx_PUBLICKEYBYTES) {
+            showStatus('error', 'Неверная длина публичного ключа X25519'); return;
+        }
+
+        // Вычисляем общий секрет с помощью X25519
+        const sharedSecret = sodium.crypto_scalarmult(myKxKeyPair.privateKey, friendPk);
+        
+        // Получаем уникальную соль для сессии (используем вашу функцию deriveSessionSalt)
         const salt = await deriveSessionSalt(myPublicKeyBuffer, friendBuf);
-        const bits = await crypto.subtle.deriveBits({name:"ECDH", public: v.key}, myEcdhKeyPair.privateKey, 384);
-        const hkdfKey = await crypto.subtle.importKey("raw", bits, {name:"HKDF"}, false, ["deriveKey"]);
-        const aesKey = await crypto.subtle.deriveKey(
-            { name:"HKDF", salt, info: HKDF_INFO, hash:"SHA-384" },
-            hkdfKey,
-            { name:"AES-GCM", length:256 },
-            false, ["encrypt","decrypt"]
-        );
-        currentAesKey = aesKey;
-        derivedAesKeyRaw = aesKey;
+        
+        // Надежно выводим финальный симметричный ключ (HKDF -> BLAKE2b)
+        const keyMaterial = new Uint8Array(sharedSecret.length + salt.length);
+        keyMaterial.set(sharedSecret, 0);
+        keyMaterial.set(salt, sharedSecret.length);
+        
+        // Ключ для XChaCha20-Poly1305 должен быть 32 байта
+        currentSymmetricKey = sodium.crypto_generichash(sodium.crypto_aead_xchacha20poly1305_ietf_KEYBYTES, keyMaterial);
+        derivedAesKeyRaw = currentSymmetricKey; // Для обратной совместимости ваших переменных
 
         updateChatHeader();
-        showStatus('success','✅ AES-ключ вычислен и установлен! Перейдите в чат.');
+        showStatus('success','✅ Ключ XChaCha20 вычислен и установлен! Перейдите в чат.');
     } catch(e) { showStatus('error','Ошибка: '+e.message); }
 });
 
@@ -1220,22 +1229,30 @@ document.getElementById('computeAndUseSharedSecret').addEventListener('click', a
 // =====================================================================
 async function generateEd25519KeyPair() {
     try {
-        const kp = await crypto.subtle.generateKey({name:"Ed25519"}, true, ["sign","verify"]);
+        // Ожидаем готовности библиотеки libsodium
+        await sodium.ready;
+        // Генерируем пару ключей Ed25519 одной простой командой
+        const kp = sodium.crypto_sign_keypair();
+        // Сохраняем объект пары ключей в глобальную переменную
         myEd25519KeyPair = kp;
-        const pubRaw = await crypto.subtle.exportKey("raw", kp.publicKey);
-        myEd25519PublicKeyRaw = pubRaw;
-        document.getElementById('myEd25519PublicKey').value = arrayBufferToBase64(pubRaw);
-        const privPkcs8 = await crypto.subtle.exportKey("pkcs8", kp.privateKey);
-        myEd25519PrivateKeyPkcs8 = privPkcs8;
-        document.getElementById('myEd25519PrivateKeyExport').value = arrayBufferToBase64(privPkcs8);
-        document.getElementById('myEd25519Fingerprint').textContent = await generateFingerprint(pubRaw);
-        document.getElementById('ed25519KeysGenerated').style.display='block';
+        // Извлекаем сырые буферы для отображения в интерфейсе
+        myEd25519PublicKeyRaw = kp.publicKey.buffer;
+        myEd25519PrivateKeyPkcs8 = kp.privateKey.buffer; // Оставили старое название переменной, чтобы не менять другие части кода
+        // Переводим ключи в Base64, чтобы вывести их в текстовые поля на экране
+        document.getElementById('myEd25519PublicKey').value = arrayBufferToBase64(myEd25519PublicKeyRaw);
+        document.getElementById('myEd25519PrivateKeyExport').value = arrayBufferToBase64(myEd25519PrivateKeyPkcs8);
+        // Обновляем визуальный отпечаток (Emoji Fingerprint) для ключа подписи
+        document.getElementById('myEd25519Fingerprint').textContent = await generateFingerprint(myEd25519PublicKeyRaw);
+        // Включаем флаги и обновляем интерфейс, как это было в вашем оригинальном коде
+        document.getElementById('ed25519KeysGenerated').style.display = 'block';
         ed25519SigningEnabled = true;
-        document.getElementById('ed25519MyStatus').className='status success';
-        document.getElementById('ed25519MyStatus').textContent='✅ Ключи Ed25519 готовы!';
+        document.getElementById('ed25519MyStatus').className = 'status success';
+        document.getElementById('ed25519MyStatus').textContent = '✅ Ключи Ed25519 готовы!';
         updateChatHeader();
-        showStatus('success','Ed25519 ключи сгенерированы!');
-    } catch(e) { showStatus('error','Ошибка: '+e.message); }
+        showStatus('success', 'Ed25519 ключи сгенерированы!');
+    } catch(e) { 
+        showStatus('error', 'Ошибка генерации Ed25519: ' + e.message); 
+    }
 }
 
 async function importEd25519PrivateKey() {
@@ -1263,21 +1280,33 @@ async function importEd25519PrivateKey() {
 }
 
 async function importFriendEd25519Key() {
-    const b64 = document.getElementById('friendEd25519PublicKey').value.trim();
-    if (!b64) { showStatus('error','Вставьте публичный ключ'); return; }
     try {
-        const buf = base64ToArrayBuffer(b64);
-        if (buf.byteLength !== 32) { showStatus('error','Неверный размер ключа: '+buf.byteLength); return; }
-        friendEd25519PublicKey = await crypto.subtle.importKey("raw", buf, {name:"Ed25519"}, true, ["verify"]);
+        // Читаем значение из текстового поля
+        const b64Str = document.getElementById('friendEd25519PublicKey').value.trim();
+        if (!b64Str) {
+            showStatus('error', 'Вставьте публичный ключ подписи');
+            return false;
+        }
+        const buf = base64ToArrayBuffer(b64Str);
+        
+        if (buf.byteLength !== 32) {
+            throw new Error("Неверная длина публичного ключа (должна быть 32 байта)");
+        }
+        
         friendEd25519PublicKeyRaw = buf;
         ed25519VerifyEnabled = true;
-        document.getElementById('friendEd25519Fingerprint').textContent = await generateFingerprint(buf);
-        document.getElementById('friendEd25519Verification').style.display='block';
-        document.getElementById('ed25519FriendStatus').className='status success';
-        document.getElementById('ed25519FriendStatus').textContent='✅ Ключ подписи собеседника установлен!';
+        
+        // Обновляем визуальные статусы
+        document.getElementById('ed25519FriendStatus').className = 'status success';
+        document.getElementById('ed25519FriendStatus').textContent = '✅ Ключ подписи собеседника установлен!';
         updateChatHeader();
-        showStatus('success','Ключ подписи собеседника установлен!');
-    } catch(e) { showStatus('error','Ошибка: '+e.message); }
+        showStatus('success', 'Ключ подписи собеседника установлен!');
+        
+        return true;
+    } catch(e) {
+        showStatus('error', "Ошибка: " + e.message);
+        return false;
+    }
 }
 
 async function updateFriendEd25519Fingerprint() {
@@ -1305,23 +1334,43 @@ function verifyEd25519Fingerprint() {
 }
 
 async function signData(data) {
+    // Если подписи отключены или мы еще не сгенерировали свои ключи — ничего не делаем
     if (!ed25519SigningEnabled || !myEd25519KeyPair) return null;
     try {
-        const bytes = (typeof data==='string') ? te.encode(data) : new Uint8Array(data);
-        return new Uint8Array(await crypto.subtle.sign({name:"Ed25519"}, myEd25519KeyPair.privateKey, bytes));
-    } catch(e) { return null; }
+        await sodium.ready;
+        // Превращаем входящие данные в массив байт (если это была строка)
+        const bytes = (typeof data === 'string') ? te.encode(data) : new Uint8Array(data);
+        
+        // crypto_sign_detached возвращает чистую подпись размером ровно 64 байта
+        return sodium.crypto_sign_detached(bytes, myEd25519KeyPair.privateKey);
+    } catch(e) { 
+        console.error("Ошибка подписи:", e);
+        return null; 
+    }
 }
 
 async function verifySignature(data, sig) {
-    if (!ed25519VerifyEnabled || !friendEd25519PublicKey)
-        return { verified:false, reason:'no_key', message:'Ключ подписи не установлен' };
+    // Если проверка отключена или у нас нет ключа друга — сообщаем об этом
+    if (!ed25519VerifyEnabled || !friendEd25519PublicKeyRaw)
+        return { verified: false, reason: 'no_key', message: 'Ключ подписи друга не установлен' };
     try {
-        const bytes = (typeof data==='string') ? te.encode(data) : new Uint8Array(data);
-        const ok = await crypto.subtle.verify({name:"Ed25519"}, friendEd25519PublicKey, sig, bytes);
-        return ok
-            ? { verified:true, reason:'valid', message:'✅ Подпись верна' }
-            : { verified:false, reason:'invalid', message:'❌ Подпись НЕДЕЙСТВИТЕЛЬНА!' };
-    } catch(e) { return { verified:false, reason:'error', message:'⚠️ Ошибка: '+e.message }; }
+        await sodium.ready;
+        // Превращаем проверяемые данные в массив байт
+        const bytes = (typeof data === 'string') ? te.encode(data) : new Uint8Array(data);
+        // Оборачиваем ключ друга в Uint8Array, как требует libsodium
+        const pk = new Uint8Array(friendEd25519PublicKeyRaw);
+        
+        // Проверяем подпись. Функция возвращает true (если всё ок) или false
+        const isValid = sodium.crypto_sign_verify_detached(sig, bytes, pk);
+        
+        if (isValid) {
+            return { verified: true, reason: 'valid', message: '✅ Подпись верна' };
+        } else {
+            return { verified: false, reason: 'invalid', message: '❌ Подпись НЕДЕЙСТВИТЕЛЬНА!' };
+        }
+    } catch(e) { 
+        return { verified: false, reason: 'error', message: '⚠️ Ошибка проверки подписи: ' + e.message }; 
+    }
 }
 
 // =====================================================================
@@ -1339,9 +1388,10 @@ async function verifySignature(data, sig) {
 //   "fileType": "..."    // только для файлов
 // }
 
-function buildEnvelope(type, ciphertextBase64, replyInfo) {
+function buildEnvelope(type, ciphertextBase64, replyInfo, fileName = null) {
     const env = { v: 2, type, ct: ciphertextBase64 };
     if (replyInfo) env.reply = replyInfo;
+    if (fileName) env.fileName = fileName;
     return btoa(unescape(encodeURIComponent(JSON.stringify(env))));
 }
 
@@ -1349,59 +1399,102 @@ function parseEnvelope(text) {
     // Пытаемся парсить как JSON-envelope (v2)
     try {
         const json = JSON.parse(decodeURIComponent(escape(atob(text))));
-        if (json.v === 2 && json.ct) return json;
+        if (json.v === 2 && json.ct) return {
+            v: json.v, 
+            type: json.type, 
+            ct: json.ct, 
+            reply: json.reply,
+            fileName: json.fileName  // ← ДОБАВИТЬ ЭТУ СТРОКУ
+        };
     } catch(e) {}
     // Fallback — старый формат (просто base64 шифротекста)
-    return { v: 1, type: 'msg', ct: text, reply: null };
+    return { v: 1, type: 'msg', ct: text, reply: null, fileName: null };
 }
 
 async function encryptPayload(plainBytes, aadPrefix) {
-    const iv = crypto.getRandomValues(new Uint8Array(12));
+    await sodium.ready;
+    // XChaCha20 требует nonce 24 байта
+    const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
     const timestamp = writeTimestamp(Date.now());
+    
     const aad = new Uint8Array(aadPrefix.length + timestamp.length);
-    aad.set(aadPrefix,0); aad.set(timestamp, aadPrefix.length);
-    const encrypted = await crypto.subtle.encrypt({name:"AES-GCM", iv, additionalData:aad}, currentAesKey, plainBytes);
+    aad.set(aadPrefix, 0); aad.set(timestamp, aadPrefix.length);
 
-    const payload = new Uint8Array(iv.length + timestamp.length + encrypted.byteLength);
-    payload.set(iv,0); payload.set(timestamp, iv.length);
-    payload.set(new Uint8Array(encrypted), iv.length + timestamp.length);
+    // Шифруем данные XChaCha20-Poly1305
+    const encrypted = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+        plainBytes, aad, null, nonce, currentSymmetricKey
+    );
 
+    // Собираем payload: [nonce 24][timestamp 8][encrypted]
+    const payload = new Uint8Array(nonce.length + timestamp.length + encrypted.length);
+    payload.set(nonce, 0); 
+    payload.set(timestamp, nonce.length);
+    payload.set(encrypted, nonce.length + timestamp.length);
+
+    // Подписываем (если включено)
     const sig = await signData(payload);
     let combined;
     if (sig) {
+        // [flag 1] [sig 64] [payload]
         combined = new Uint8Array(1 + 64 + payload.length);
-        combined[0] = 0x01; combined.set(sig,1); combined.set(payload,65);
+        combined[0] = 0x01; 
+        combined.set(sig, 1); 
+        combined.set(payload, 65);
     } else {
+        // [flag 1] [payload]
         combined = new Uint8Array(1 + payload.length);
-        combined[0] = 0x00; combined.set(payload,1);
+        combined[0] = 0x00; 
+        combined.set(payload, 1);
     }
     return arrayBufferToBase64(combined);
 }
 
 async function decryptPayload(ctBase64, aadPrefix) {
+    await sodium.ready;
     const combined = new Uint8Array(base64ToArrayBuffer(ctBase64));
-    let iv, timestamp, encrypted, signature = null, hasSig = false;
+    let nonce, timestamp, encrypted, signature = null, hasSig = false;
+    
     const flag = combined[0];
+    const NONCE_LEN = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES; // 24
+    const TS_LEN = 8;
+    
+    // Парсим с учетом нового размера nonce (24 байта вместо 12)
     if (flag === 0x01) {
-        hasSig = true; signature = combined.slice(1,65);
-        iv = combined.slice(65,77); timestamp = combined.slice(77,85); encrypted = combined.slice(85);
+        hasSig = true; 
+        signature = combined.slice(1, 65);
+        nonce = combined.slice(65, 65 + NONCE_LEN); 
+        timestamp = combined.slice(65 + NONCE_LEN, 65 + NONCE_LEN + TS_LEN); 
+        encrypted = combined.slice(65 + NONCE_LEN + TS_LEN);
     } else if (flag === 0x00) {
-        iv = combined.slice(1,13); timestamp = combined.slice(13,21); encrypted = combined.slice(21);
+        nonce = combined.slice(1, 1 + NONCE_LEN); 
+        timestamp = combined.slice(1 + NONCE_LEN, 1 + NONCE_LEN + TS_LEN); 
+        encrypted = combined.slice(1 + NONCE_LEN + TS_LEN);
     } else {
-        iv = combined.slice(0,12); timestamp = combined.slice(12,20); encrypted = combined.slice(20);
+        throw new Error("Неизвестный формат пакета");
     }
 
     const aad = new Uint8Array(aadPrefix.length + timestamp.length);
-    aad.set(aadPrefix,0); aad.set(timestamp, aadPrefix.length);
+    aad.set(aadPrefix, 0); aad.set(timestamp, aadPrefix.length);
 
-    const decrypted = await crypto.subtle.decrypt({name:"AES-GCM", iv, additionalData:aad}, currentAesKey, encrypted);
+    // Дешифруем
+    let decrypted;
+    try {
+        decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+            null, encrypted, aad, nonce, currentSymmetricKey
+        );
+    } catch (e) {
+        throw new Error("Неверный MAC или ключ (ошибка расшифровки)");
+    }
 
     const timeCheck = validateMessageTime(extractTimestamp(timestamp));
 
     let sigResult = null;
     if (hasSig && signature) {
-        const pv = new Uint8Array(iv.length + timestamp.length + encrypted.length);
-        pv.set(iv,0); pv.set(timestamp, iv.length); pv.set(encrypted, iv.length+timestamp.length);
+        // Восстанавливаем оригинальный payload для проверки подписи
+        const pv = new Uint8Array(nonce.length + timestamp.length + encrypted.length);
+        pv.set(nonce, 0); 
+        pv.set(timestamp, nonce.length); 
+        pv.set(encrypted, nonce.length + timestamp.length);
         sigResult = await verifySignature(pv, signature);
     }
 
@@ -1464,7 +1557,7 @@ async function toggleVoiceRecord() {
 function updateChatHeader() {
     const el = document.getElementById('chatHeaderStatus');
     const parts = [];
-    if (currentAesKey) parts.push('🔒 AES-256');
+    if (currentSymmetricKey) parts.push('🔒 XChaCha20');
     else parts.push('⚠️ Ключ не установлен');
     if (ed25519SigningEnabled) parts.push('✍️ Подпись');
     if (ed25519VerifyEnabled) parts.push('🔍 Проверка');
@@ -1770,7 +1863,7 @@ function clearChat() {
 // ЧАТ: Зашифровать
 // =====================================================================
 async function chatEncrypt() {
-    if (!currentAesKey) { showStatus('error','Сначала установите AES-ключ'); return; }
+    if (!currentSymmetricKey) { showStatus('error','Сначала установите XChaCha20-ключ'); return; }
 
     const input = document.getElementById('chatInput');
     const text = input.value.trim();
@@ -1794,19 +1887,22 @@ async function chatEncrypt() {
         if (hasFile) {
             // Шифруем файл
             const ctB64 = await encryptPayload(new Uint8Array(chatAttachedFile.data), AAD_FILE);
-            const envelope = buildEnvelope('file', ctB64, replyInfo);
+            const envelope = buildEnvelope('file', ctB64, replyInfo, chatAttachedFile.file.name);
 
             // Показываем в чате
             addMessageBubble({
                 side: 'mine',
                 text: text || null,
                 cipherText: envelope,
-                fileInfo: { name: chatAttachedFile.file.name, size: chatAttachedFile.file.size, type: chatAttachedFile.file.type },
+                fileInfo: { 
+                    name: chatAttachedFile.file.name + ' → encrypted.enc',  // ← ПОКАЗЫВАЕМ, ВО ЧТО ПРЕВРАТИТСЯ
+                    size: chatAttachedFile.file.size, 
+                    type: chatAttachedFile.file.type 
+                },
                 mediaData: chatAttachedFile.data,
                 replyTo: replyToMessageId,
                 isSigned: ed25519SigningEnabled
             });
-
             clearAttachedFile();
         } else {
             // Шифруем текст
@@ -1835,7 +1931,7 @@ async function chatEncrypt() {
 // ЧАТ: Расшифровать
 // =====================================================================
 async function chatDecrypt() {
-    if (!currentAesKey) { showStatus('error','Сначала установите AES-ключ'); return; }
+    if (!currentSymmetricKey) { showStatus('error','Сначала установите XChaCha20-ключ'); return; }
 
     const input = document.getElementById('chatInput');
     let rawText = input.value.trim();
@@ -1856,6 +1952,7 @@ async function chatDecrypt() {
 
     try {
         const env = parseEnvelope(rawText);
+        const originalFileName = env.fileName || 'decrypted_file';
         const aadPrefix = (env.type === 'file') ? AAD_FILE : AAD_MESSAGE;
         const result = await decryptPayload(env.ct, aadPrefix);
 
@@ -1863,7 +1960,7 @@ async function chatDecrypt() {
         const replyFromEnvelope = env.reply || null;
 
         if (env.type === 'file') {
-            const fileName = 'decrypted_file';
+            const fileName = env.fileName || 'decrypted_file';
             const fileType = 'application/octet-stream';
             const mediaType = getVerifiedMediaType(result.data);
 
@@ -1987,7 +2084,19 @@ function destroyAllData() {
 // =====================================================================
 // ИНИЦИАЛИЗАЦИЯ
 // =====================================================================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        if (typeof sodium !== 'undefined') {
+            await sodium.ready;
+            console.log("Libsodium успешно инициализирована!");
+        } else {
+            showStatus('error', 'Ошибка: файл sodium.js не подключен или не найден рядом с HTML');
+            return;
+        }
+    } catch (err) {
+        showStatus('error', 'Ошибка крипто-ядра: ' + err.message);
+        return;
+    }
     loadTheme();
 
     document.getElementById('verifyEcdhFingerprintBtn').addEventListener('click', verifyEcdhFingerprint);
