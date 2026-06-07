@@ -1707,8 +1707,13 @@ function addMessageBubble(opts) {
     // Media preview
     if (opts.mediaData) {
         const mediaType = getVerifiedMediaType(opts.mediaData);
-        const category = mediaType ? SAFE_MEDIA_TYPES[mediaType] : null;
+        let category = mediaType ? SAFE_MEDIA_TYPES[mediaType] : null; // ВАЖНО: заменили const на let
         if (category && !containsScriptContent(opts.mediaData)) {
+            // --- ДОБАВЛЕННЫЙ ФИКС ДЛЯ ГОЛОСОВЫХ ---
+            // Если парсер принял WebM-аудио за видео, принудительно переключаем категорию
+            if (category === 'video' && opts.fileInfo && opts.fileInfo.name.includes('Voice_')) {
+                category = 'audio';
+            }
             const blob = new Blob([opts.mediaData], { type: mediaType });
             const url = URL.createObjectURL(blob);
             mediaObjectUrls.push(url);
