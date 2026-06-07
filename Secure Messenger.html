@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' blob:; media-src blob:; object-src 'none'; frame-src 'none'; connect-src 'none'; script-src 'self' 'unsafe-inline';">
-    <title>Secure Messenger (ECDH P-384 + Ed25519 + Emoji Fingerprint)</title>
+    <title>Secure Messenger</title>
     <style>
         :root {
             --bg-color: #f5f0eb;
@@ -844,7 +844,7 @@
                 <div class="chat-empty">
                     <div class="chat-empty-icon">🔐</div>
                     <div class="chat-empty-text">
-                        Установите AES-ключ на вкладке «Обмен ключами»,<br>
+                        Установите XChaCha20-ключ на вкладке «Обмен ключами»,<br>
                         затем вставляйте текст или файлы для шифрования / расшифровки
                     </div>
                 </div>
@@ -896,10 +896,10 @@
     <!-- Подвал -->
     <small style="display:block; margin-top: 15px;">
         📝 <strong>Как использовать:</strong>
-        1. Сгенерируйте ECDH ключи и обменяйтесь ими
+        1. Сгенерируйте X25519-ключи и обменяйтесь ими
         2. Настройте подписи Ed25519
         3. Сверьте отпечатки
-        4. Вычислите общий AES-ключ → перейдите в чат
+        4. Вычислите общий XChaCha20-ключ → перейдите в чат
     </small>
 
     <div class="destroy-section">
@@ -1764,7 +1764,7 @@ function addMessageBubble(opts) {
         }
         // Кнопка скачивания .aes файла для своих зашифрованных файлов
         if (opts.side === 'mine' && opts.fileInfo) {
-            html += `<button class="msg-action-btn" onclick="downloadEncryptedFile(${msgId})">💾 Скачать .aes</button>`;
+            html += `<button class="msg-action-btn" onclick="downloadEncryptedFile(${msgId})">💾 Скачать</button>`;
         }
     }
     html += `<button class="msg-action-btn" onclick="setReplyTo(${msgId})">↩️ Ответить</button>`;
@@ -1789,11 +1789,11 @@ function addMessageBubble(opts) {
         bubble._downloadName = opts.fileInfo.name;
         bubble._downloadType = opts.fileInfo.type;
     }
-    // === ИЗМЕНЕНИЕ 2: сохраняем шифротекст для скачивания .aes ===
+    // === ИЗМЕНЕНИЕ 2: сохраняем шифротекст для скачивания .enc ===
     if (opts.cipherText) {
         bubble._cipherText = opts.cipherText;
         // Всегда используем фиксированное имя, чтобы не раскрывать оригинальное
-        bubble._encryptedFileName = 'encrypted.aes';
+        bubble._encryptedFileName = 'encrypted.enc';
     }
 
         container.appendChild(bubble);
@@ -1822,7 +1822,7 @@ async function copyCipher(msgId) {
     }
 }
 
-// === ИЗМЕНЕНИЕ 2: скачивание зашифрованного файла (.aes) ===
+// === ИЗМЕНЕНИЕ 2: скачивание зашифрованного файла (.enc) ===
 function downloadEncryptedFile(msgId) {
     const el = document.getElementById('msg-' + msgId);
     if (!el || !el._cipherText) return;
@@ -1831,7 +1831,7 @@ function downloadEncryptedFile(msgId) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = el._encryptedFileName || 'encrypted.aes';
+    a.download = el._encryptedFileName || 'encrypted.enc';
     a.click();
     URL.revokeObjectURL(url);
     showStatus('success', 'Зашифрованный файл сохранён');
@@ -1936,7 +1936,7 @@ async function chatDecrypt() {
     const input = document.getElementById('chatInput');
     let rawText = input.value.trim();
 
-    // Также проверяем прикреплённый файл (зашифрованный .aes)
+    // Также проверяем прикреплённый файл (зашифрованный .enc)
     if (!rawText && chatAttachedFile) {
         // Пробуем прочитать содержимое файла как текст (envelope base64)
         try {
