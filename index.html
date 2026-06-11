@@ -954,10 +954,10 @@ const themeNames = { cream:'Кремовая', dark:'Тёмная', rose:'Роз
 // УТИЛИТЫ
 // =====================================================================
 
-// DOUBLE RATCHET ENGINE
+// DOUBLE RATCHET ENGINE (Strict Signal Protocol Implementation)
 const Ratchet = {
     state: { RK: null, CKs: null, CKr: null, DHs: null, DHr: null, Ns: 0, Nr: 0, PN: 0, skipped: {} },
-    MAX_SKIP: 50,
+    MAX_SKIP: 100, // Лимит на пропуск сообщений (защита от DoS)
 
     KDF_RK: function(rk, dh_out) {
         const out = sodium.crypto_generichash(64, dh_out, rk);
@@ -970,12 +970,8 @@ const Ratchet = {
         return { CK: next_ck, MK: mk };
     },
 
-    // ВАЖНО: Добавлен 4-й аргумент myStaticKeyPair
     init: function(sharedSecret, isAlice, friendStaticPub, myStaticKeyPair) {
-        this.state.RK = sharedSecret; 
-        this.state.Ns = 0; this.state.Nr = 0; this.state.PN = 0;
-        this.state.skipped = {};
-
+        this.state = { RK: sharedSecret, CKs: null, CKr: null, DHs: null, DHr: null, Ns: 0, Nr: 0, PN: 0, skipped: {} };
         if (isAlice) {
             this.state.DHs = sodium.crypto_kx_keypair();
             this.state.DHr = friendStaticPub;
@@ -983,13 +979,8 @@ const Ratchet = {
             const kdf = this.KDF_RK(this.state.RK, dh_out);
             this.state.RK = kdf.RK;
             this.state.CKs = kdf.CK;
-            this.state.CKr = null;
         } else {
-            // ИСПРАВЛЕНИЕ: Боб использует свой постоянный ключ для первого шага!
-            this.state.DHs = myStaticKeyPair; 
-            this.state.DHr = null;
-            this.state.CKs = null;
-            this.state.CKr = null;
+            this.state.DHs = myStaticKeyPair;
         }
     },
 
@@ -1006,55 +997,82 @@ const Ratchet = {
         return { mk: kdf.MK, header: header };
     },
 
-    ratchetDecrypt: function(header) {
-        const dh_pub = new Uint8Array(base64ToArrayBuffer(header.dh));
+    // ТРАНЗАКЦИОННАЯ РАСШИФРОВКА: Возвращает ключ и временное состояние, не трогая основное
+    ratchetDecryptTentative: function(header) {
         const skipKey = header.dh + '_' + header.n;
         
+        // 1. Сообщение пришло с опозданием (ключ уже пропущен и сохранен)
         if (this.state.skipped[skipKey]) {
-            const mk = this.state.skipped[skipKey];
-            delete this.state.skipped[skipKey];
-            return mk;
+            return { mk: this.state.skipped[skipKey], tentativeState: null, skipKeyToRemove: skipKey };
         }
 
-        if (!this.state.DHr || arrayBufferToBase64(this.state.DHr) !== header.dh) {
-            this.skipMessageKeys(header.pn);
-            this.DHRatchetStep(dh_pub);
+        // 2. Делаем глубокую копию состояния, чтобы не "отравить" его при ошибке MAC
+        let tempState = {
+            RK: new Uint8Array(this.state.RK),
+            CKs: this.state.CKs ? new Uint8Array(this.state.CKs) : null,
+            CKr: this.state.CKr ? new Uint8Array(this.state.CKr) : null,
+            DHs: { publicKey: new Uint8Array(this.state.DHs.publicKey), privateKey: new Uint8Array(this.state.DHs.privateKey) },
+            DHr: this.state.DHr ? new Uint8Array(this.state.DHr) : null,
+            Ns: this.state.Ns, Nr: this.state.Nr, PN: this.state.PN,
+            skipped: { ...this.state.skipped }
+        };
+
+        const dh_pub = new Uint8Array(base64ToArrayBuffer(header.dh));
+
+        // Если DH-ключ собеседника изменился — крутим корневой ратчет
+        if (!tempState.DHr || arrayBufferToBase64(tempState.DHr) !== header.dh) {
+            this.skipMessageKeys(tempState, header.pn);
+            this.DHRatchetStep(tempState, dh_pub);
         }
 
-        this.skipMessageKeys(header.n);
-        const kdf = this.KDF_CK(this.state.CKr);
-        this.state.CKr = kdf.CK;
-        this.state.Nr++;
-        return kdf.MK;
+        // Пропускаем ключи в текущей цепочке, если сообщение из будущего
+        this.skipMessageKeys(tempState, header.n);
+        
+        // Вычисляем Message Key
+        const kdf = this.KDF_CK(tempState.CKr);
+        tempState.CKr = kdf.CK;
+        tempState.Nr++;
+
+        return { mk: kdf.MK, tentativeState: tempState, skipKeyToRemove: null };
     },
 
-    DHRatchetStep: function(dh_pub) {
-        this.state.PN = this.state.Ns;
-        this.state.Ns = 0;
-        this.state.Nr = 0;
-        this.state.DHr = dh_pub;
-
-        let dh_out = sodium.crypto_scalarmult(this.state.DHs.privateKey, this.state.DHr);
-        let kdf = this.KDF_RK(this.state.RK, dh_out);
-        this.state.RK = kdf.RK;
-        this.state.CKr = kdf.CK;
-
-        this.state.DHs = sodium.crypto_kx_keypair();
-        dh_out = sodium.crypto_scalarmult(this.state.DHs.privateKey, this.state.DHr);
-        kdf = this.KDF_RK(this.state.RK, dh_out);
-        this.state.RK = kdf.RK;
-        this.state.CKs = kdf.CK;
+    // ПРИМЕНЕНИЕ СОСТОЯНИЯ: Вызывается только если decryptPayload прошел успешно
+    commitState: function(tentativeState, skipKeyToRemove) {
+        if (skipKeyToRemove) {
+            delete this.state.skipped[skipKeyToRemove];
+        }
+        if (tentativeState) {
+            this.state = tentativeState;
+        }
     },
 
-    skipMessageKeys: function(until_n) {
-        if (this.state.Nr + this.MAX_SKIP < until_n) throw new Error("Слишком много пропущенных сообщений");
-        if (this.state.CKr != null) {
-            while (this.state.Nr < until_n) {
-                const kdf = this.KDF_CK(this.state.CKr);
-                this.state.CKr = kdf.CK;
-                const skipKey = arrayBufferToBase64(this.state.DHr) + '_' + this.state.Nr;
-                this.state.skipped[skipKey] = kdf.MK;
-                this.state.Nr++;
+    DHRatchetStep: function(state, dh_pub) {
+        state.PN = state.Ns;
+        state.Ns = 0;
+        state.Nr = 0;
+        state.DHr = dh_pub;
+
+        let dh_out = sodium.crypto_scalarmult(state.DHs.privateKey, state.DHr);
+        let kdf = this.KDF_RK(state.RK, dh_out);
+        state.RK = kdf.RK;
+        state.CKr = kdf.CK;
+
+        state.DHs = sodium.crypto_kx_keypair();
+        dh_out = sodium.crypto_scalarmult(state.DHs.privateKey, state.DHr);
+        kdf = this.KDF_RK(state.RK, dh_out);
+        state.RK = kdf.RK;
+        state.CKs = kdf.CK;
+    },
+
+    skipMessageKeys: function(state, until_n) {
+        if (state.Nr + this.MAX_SKIP < until_n) throw new Error("Превышен лимит пропуска сообщений (защита от DoS)");
+        if (state.CKr != null) {
+            while (state.Nr < until_n) {
+                const kdf = this.KDF_CK(state.CKr);
+                state.CKr = kdf.CK;
+                const skipKey = arrayBufferToBase64(state.DHr) + '_' + state.Nr;
+                state.skipped[skipKey] = kdf.MK;
+                state.Nr++;
             }
         }
     }
@@ -2066,12 +2084,16 @@ async function chatDecrypt() {
         const originalFileName = env.fileName || 'decrypted_file';
         const aadPrefix = (env.type === 'file') ? AAD_FILE : AAD_MESSAGE;
 
-        // === DOUBLE RATCHET: Получаем ключ из заголовка ===
-        if (!env.rh) throw new Error("Сообщение не содержит заголовка Double Ratchet. Возможно, это старый формат.");
-        const mk = Ratchet.ratchetDecrypt(env.rh);
+        if (!env.rh) throw new Error("Сообщение не содержит заголовка Double Ratchet.");
 
-        // Передаем mk в дешифратор
-        const result = await decryptPayload(env.ct, aadPrefix, mk);
+        // 1. Получаем транзакционный слепок и ключ от ратчета
+        const ratchetResult = Ratchet.ratchetDecryptTentative(env.rh);
+
+        // 2. Пытаемся расшифровать. Если MAC или ключ неверны, выбросится ошибка!
+        const result = await decryptPayload(env.ct, aadPrefix, ratchetResult.mk);
+
+        // 3. Расшифровка успешна -> фиксируем состояние ратчета
+        Ratchet.commitState(ratchetResult.tentativeState, ratchetResult.skipKeyToRemove);
 
         const replyFromEnvelope = env.reply || null;
 
@@ -2110,10 +2132,11 @@ async function chatDecrypt() {
         autoResizeInput();
         cancelReply();
     } catch(e) {
+        // Если произошла ошибка (сбой MAC, старое сообщение, мусор),
+        // Ratchet.state остается нетронутым, сессия не ломается!
         showStatus('error','Ошибка расшифровки: ' + e.message);
     }
 }
-
 // =====================================================================
 // ЧАТ: Файлы
 // =====================================================================
