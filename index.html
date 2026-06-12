@@ -893,15 +893,6 @@
         </div>
     </div>
 
-    <!-- Подвал -->
-    <small style="display:block; margin-top: 15px;">
-        📝 <strong>Как использовать:</strong>
-        1. Сгенерируйте X25519-ключи и обменяйтесь ими
-        2. Настройте подписи Ed25519
-        3. Сверьте отпечатки
-        4. Вычислите общий XChaCha20-ключ → перейдите в чат
-    </small>
-
     <div class="destroy-section">
         <h3>⚠️ Уничтожение данных</h3>
         <p>Безвозвратно удаляет все ключи, сообщения и файлы из памяти</p>
@@ -918,6 +909,7 @@ const td = new TextDecoder();
 let currentSymmetricKey = null;
 let myKxKeyPair = null;
 let myPublicKeyBuffer = null;
+let isInitiatorRole = null; // true = инициатор, false = принимающий
 let myEcdhFingerprintStr = '';
 let derivedAesKeyRaw = null;
 
@@ -953,6 +945,131 @@ const themeNames = { cream:'Кремовая', dark:'Тёмная', rose:'Роз
 // =====================================================================
 // УТИЛИТЫ
 // =====================================================================
+
+// DOUBLE RATCHET ENGINE (Strict Signal Protocol Implementation)
+const Ratchet = {
+    state: { RK: null, CKs: null, CKr: null, DHs: null, DHr: null, Ns: 0, Nr: 0, PN: 0, skipped: {} },
+    MAX_SKIP: 100, // Лимит на пропуск сообщений (защита от DoS)
+
+    KDF_RK: function(rk, dh_out) {
+        const out = sodium.crypto_generichash(64, dh_out, rk);
+        return { RK: out.slice(0, 32), CK: out.slice(32, 64) };
+    },
+
+    KDF_CK: function(ck) {
+        const mk = sodium.crypto_generichash(32, new Uint8Array([0x01]), ck);
+        const next_ck = sodium.crypto_generichash(32, new Uint8Array([0x02]), ck);
+        return { CK: next_ck, MK: mk };
+    },
+
+    init: function(sharedSecret, isAlice, friendStaticPub, myStaticKeyPair) {
+        this.state = { RK: sharedSecret, CKs: null, CKr: null, DHs: null, DHr: null, Ns: 0, Nr: 0, PN: 0, skipped: {} };
+        if (isAlice) {
+            this.state.DHs = sodium.crypto_kx_keypair();
+            this.state.DHr = friendStaticPub;
+            const dh_out = sodium.crypto_scalarmult(this.state.DHs.privateKey, this.state.DHr);
+            const kdf = this.KDF_RK(this.state.RK, dh_out);
+            this.state.RK = kdf.RK;
+            this.state.CKs = kdf.CK;
+        } else {
+            this.state.DHs = myStaticKeyPair;
+        }
+    },
+
+    ratchetEncrypt: function() {
+        if (!this.state.CKs) throw new Error("Подождите, пока Инициатор пришлет первое сообщение.");
+        const kdf = this.KDF_CK(this.state.CKs);
+        this.state.CKs = kdf.CK;
+        const header = {
+            dh: arrayBufferToBase64(this.state.DHs.publicKey),
+            n: this.state.Ns,
+            pn: this.state.PN
+        };
+        this.state.Ns++;
+        return { mk: kdf.MK, header: header };
+    },
+
+    // ТРАНЗАКЦИОННАЯ РАСШИФРОВКА: Возвращает ключ и временное состояние, не трогая основное
+    ratchetDecryptTentative: function(header) {
+        const skipKey = header.dh + '_' + header.n;
+        
+        // 1. Сообщение пришло с опозданием (ключ уже пропущен и сохранен)
+        if (this.state.skipped[skipKey]) {
+            return { mk: this.state.skipped[skipKey], tentativeState: null, skipKeyToRemove: skipKey };
+        }
+
+        // 2. Делаем глубокую копию состояния, чтобы не "отравить" его при ошибке MAC
+        let tempState = {
+            RK: new Uint8Array(this.state.RK),
+            CKs: this.state.CKs ? new Uint8Array(this.state.CKs) : null,
+            CKr: this.state.CKr ? new Uint8Array(this.state.CKr) : null,
+            DHs: { publicKey: new Uint8Array(this.state.DHs.publicKey), privateKey: new Uint8Array(this.state.DHs.privateKey) },
+            DHr: this.state.DHr ? new Uint8Array(this.state.DHr) : null,
+            Ns: this.state.Ns, Nr: this.state.Nr, PN: this.state.PN,
+            skipped: { ...this.state.skipped }
+        };
+
+        const dh_pub = new Uint8Array(base64ToArrayBuffer(header.dh));
+
+        // Если DH-ключ собеседника изменился — крутим корневой ратчет
+        if (!tempState.DHr || arrayBufferToBase64(tempState.DHr) !== header.dh) {
+            this.skipMessageKeys(tempState, header.pn);
+            this.DHRatchetStep(tempState, dh_pub);
+        }
+
+        // Пропускаем ключи в текущей цепочке, если сообщение из будущего
+        this.skipMessageKeys(tempState, header.n);
+        
+        // Вычисляем Message Key
+        const kdf = this.KDF_CK(tempState.CKr);
+        tempState.CKr = kdf.CK;
+        tempState.Nr++;
+
+        return { mk: kdf.MK, tentativeState: tempState, skipKeyToRemove: null };
+    },
+
+    // ПРИМЕНЕНИЕ СОСТОЯНИЯ: Вызывается только если decryptPayload прошел успешно
+    commitState: function(tentativeState, skipKeyToRemove) {
+        if (skipKeyToRemove) {
+            delete this.state.skipped[skipKeyToRemove];
+        }
+        if (tentativeState) {
+            this.state = tentativeState;
+        }
+    },
+
+    DHRatchetStep: function(state, dh_pub) {
+        state.PN = state.Ns;
+        state.Ns = 0;
+        state.Nr = 0;
+        state.DHr = dh_pub;
+
+        let dh_out = sodium.crypto_scalarmult(state.DHs.privateKey, state.DHr);
+        let kdf = this.KDF_RK(state.RK, dh_out);
+        state.RK = kdf.RK;
+        state.CKr = kdf.CK;
+
+        state.DHs = sodium.crypto_kx_keypair();
+        dh_out = sodium.crypto_scalarmult(state.DHs.privateKey, state.DHr);
+        kdf = this.KDF_RK(state.RK, dh_out);
+        state.RK = kdf.RK;
+        state.CKs = kdf.CK;
+    },
+
+    skipMessageKeys: function(state, until_n) {
+        if (state.Nr + this.MAX_SKIP < until_n) throw new Error("Превышен лимит пропуска сообщений (защита от DoS)");
+        if (state.CKr != null) {
+            while (state.Nr < until_n) {
+                const kdf = this.KDF_CK(state.CKr);
+                state.CKr = kdf.CK;
+                const skipKey = arrayBufferToBase64(state.DHr) + '_' + state.Nr;
+                state.skipped[skipKey] = kdf.MK;
+                state.Nr++;
+            }
+        }
+    }
+};
+
 function arrayBufferToBase64(buffer) {
     const bytes = new Uint8Array(buffer);
     const CHUNK_SIZE = 0x8000; // 32KB chunks
@@ -1218,6 +1335,18 @@ document.getElementById('computeAndUseSharedSecret').addEventListener('click', a
         // Ключ для XChaCha20-Poly1305 должен быть 32 байта
         currentSymmetricKey = sodium.crypto_generichash(sodium.crypto_aead_xchacha20poly1305_ietf_KEYBYTES, keyMaterial);
         derivedAesKeyRaw = currentSymmetricKey; // Для обратной совместимости ваших переменных
+        // === ИНИЦИАЛИЗАЦИЯ DOUBLE RATCHET ===
+        const a = new Uint8Array(myPublicKeyBuffer);
+        let cmp = 0;
+        for (let i = 0; i < 32; i++) {
+            if (a[i] < friendPk[i]) { cmp = -1; break; } 
+            else if (a[i] > friendPk[i]) { cmp = 1; break; }
+        }
+
+        const isInitiator = cmp < 0;
+        isInitiatorRole = isInitiator;
+        Ratchet.init(currentSymmetricKey, isInitiator, friendPk, myKxKeyPair);
+        updateChatEmptyState();
 
         updateChatHeader();
         showStatus('success','✅ Ключ XChaCha20 вычислен и установлен! Перейдите в чат.');
@@ -1388,60 +1517,55 @@ async function verifySignature(data, sig) {
 //   "fileType": "..."    // только для файлов
 // }
 
-function buildEnvelope(type, ciphertextBase64, replyInfo, fileName = null) {
-    const env = { v: 2, type, ct: ciphertextBase64 };
+function buildEnvelope(type, ciphertextBase64, replyInfo, fileName = null, ratchetHeader = null) {
+    const env = { v: 3, type, ct: ciphertextBase64 };
     if (replyInfo) env.reply = replyInfo;
     if (fileName) env.fileName = fileName;
+    if (ratchetHeader) env.rh = ratchetHeader;
     return btoa(unescape(encodeURIComponent(JSON.stringify(env))));
 }
 
 function parseEnvelope(text) {
-    // Пытаемся парсить как JSON-envelope (v2)
     try {
         const json = JSON.parse(decodeURIComponent(escape(atob(text))));
-        if (json.v === 2 && json.ct) return {
+        if ((json.v === 2 || json.v === 3) && json.ct) return {
             v: json.v, 
             type: json.type, 
             ct: json.ct, 
             reply: json.reply,
-            fileName: json.fileName  // ← ДОБАВИТЬ ЭТУ СТРОКУ
+            fileName: json.fileName,
+            rh: json.rh
         };
     } catch(e) {}
-    // Fallback — старый формат (просто base64 шифротекста)
-    return { v: 1, type: 'msg', ct: text, reply: null, fileName: null };
+    return { v: 1, type: 'msg', ct: text, reply: null, fileName: null, rh: null };
 }
 
-async function encryptPayload(plainBytes, aadPrefix) {
+async function encryptPayload(plainBytes, aadPrefix, messageKey) {
     await sodium.ready;
-    // XChaCha20 требует nonce 24 байта
     const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
     const timestamp = writeTimestamp(Date.now());
     
     const aad = new Uint8Array(aadPrefix.length + timestamp.length);
     aad.set(aadPrefix, 0); aad.set(timestamp, aadPrefix.length);
 
-    // Шифруем данные XChaCha20-Poly1305
+    // Используем переданный messageKey вместо глобального currentSymmetricKey
     const encrypted = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-        plainBytes, aad, null, nonce, currentSymmetricKey
+        plainBytes, aad, null, nonce, messageKey
     );
 
-    // Собираем payload: [nonce 24][timestamp 8][encrypted]
     const payload = new Uint8Array(nonce.length + timestamp.length + encrypted.length);
     payload.set(nonce, 0); 
     payload.set(timestamp, nonce.length);
     payload.set(encrypted, nonce.length + timestamp.length);
 
-    // Подписываем (если включено)
     const sig = await signData(payload);
     let combined;
     if (sig) {
-        // [flag 1] [sig 64] [payload]
         combined = new Uint8Array(1 + 64 + payload.length);
         combined[0] = 0x01; 
         combined.set(sig, 1); 
         combined.set(payload, 65);
     } else {
-        // [flag 1] [payload]
         combined = new Uint8Array(1 + payload.length);
         combined[0] = 0x00; 
         combined.set(payload, 1);
@@ -1449,16 +1573,15 @@ async function encryptPayload(plainBytes, aadPrefix) {
     return arrayBufferToBase64(combined);
 }
 
-async function decryptPayload(ctBase64, aadPrefix) {
+async function decryptPayload(ctBase64, aadPrefix, messageKey) {
     await sodium.ready;
     const combined = new Uint8Array(base64ToArrayBuffer(ctBase64));
     let nonce, timestamp, encrypted, signature = null, hasSig = false;
     
     const flag = combined[0];
-    const NONCE_LEN = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES; // 24
+    const NONCE_LEN = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES;
     const TS_LEN = 8;
     
-    // Парсим с учетом нового размера nonce (24 байта вместо 12)
     if (flag === 0x01) {
         hasSig = true; 
         signature = combined.slice(1, 65);
@@ -1476,11 +1599,11 @@ async function decryptPayload(ctBase64, aadPrefix) {
     const aad = new Uint8Array(aadPrefix.length + timestamp.length);
     aad.set(aadPrefix, 0); aad.set(timestamp, aadPrefix.length);
 
-    // Дешифруем
     let decrypted;
     try {
+        // Используем переданный messageKey
         decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-            null, encrypted, aad, nonce, currentSymmetricKey
+            null, encrypted, aad, nonce, messageKey
         );
     } catch (e) {
         throw new Error("Неверный MAC или ключ (ошибка расшифровки)");
@@ -1490,7 +1613,6 @@ async function decryptPayload(ctBase64, aadPrefix) {
 
     let sigResult = null;
     if (hasSig && signature) {
-        // Восстанавливаем оригинальный payload для проверки подписи
         const pv = new Uint8Array(nonce.length + timestamp.length + encrypted.length);
         pv.set(nonce, 0); 
         pv.set(timestamp, nonce.length); 
@@ -1572,6 +1694,29 @@ function scrollChatBottom() {
 function clearEmptyState() {
     const empty = document.querySelector('.chat-empty');
     if (empty) empty.remove();
+}
+
+function updateChatEmptyState() {
+    const container = document.getElementById('chatMessages');
+
+    // если уже есть сообщения — ничего не делаем
+    if (chatMessageCounter > 0) return;
+
+    let text =
+        'Установите XChaCha20-ключ на вкладке «Обмен ключами»,\nзатем переходите в чат';
+
+    if (isInitiatorRole === true) {
+        text = 'Напишите первое сообщение, чтобы начать диалог';
+    } else if (isInitiatorRole === false) {
+        text = 'Дождитесь, пока собеседник отправит первое сообщение';
+    }
+
+    container.innerHTML = `
+        <div class="chat-empty">
+            <div class="chat-empty-icon">🔐</div>
+            <div class="chat-empty-text">${text}</div>
+        </div>
+    `;
 }
 
 // === ИЗМЕНЕНИЕ 1: получение preview с учётом кэша ===
@@ -1854,14 +1999,11 @@ function downloadFileFromMsg(msgId) {
 
 function clearChat() {
     const container = document.getElementById('chatMessages');
-    container.innerHTML = `<div class="chat-empty">
-        <div class="chat-empty-icon">🔐</div>
-        <div class="chat-empty-text">Чат очищен</div>
-    </div>`;
     chatMessageCounter = 0;
-    replyInfoCache.clear(); // === ИЗМЕНЕНИЕ 1: очищаем кэш ===
+    replyInfoCache.clear();
     cancelReply();
     clearAttachedFile();
+    updateChatEmptyState();
 }
 
 // =====================================================================
@@ -1877,30 +2019,28 @@ async function chatEncrypt() {
     if (!text && !hasFile) { showStatus('error','Введите сообщение или прикрепите файл'); return; }
 
     try {
-        // Подготовка reply info (сохраняем sender и preview)
         let replyInfo = null;
         if (replyToMessageId) {
             const sender = getMessageSender(replyToMessageId);
             const preview = getMessagePreview(replyToMessageId);
-            replyInfo = {
-                id: replyToMessageId,
-                preview: preview,
-                sender: sender
-            };
+            replyInfo = { id: replyToMessageId, preview: preview, sender: sender };
         }
 
-        if (hasFile) {
-            // Шифруем файл
-            const ctB64 = await encryptPayload(new Uint8Array(chatAttachedFile.data), AAD_FILE);
-            const envelope = buildEnvelope('file', ctB64, replyInfo, chatAttachedFile.file.name);
+        // === DOUBLE RATCHET: Получаем ключ и заголовок ===
+        const rData = Ratchet.ratchetEncrypt();
 
-            // Показываем в чате
+        if (hasFile) {
+            // Передаем rData.mk
+            const ctB64 = await encryptPayload(new Uint8Array(chatAttachedFile.data), AAD_FILE, rData.mk);
+            // Передаем rData.header
+            const envelope = buildEnvelope('file', ctB64, replyInfo, chatAttachedFile.file.name, rData.header);
+
             addMessageBubble({
                 side: 'mine',
                 text: text || null,
                 cipherText: envelope,
                 fileInfo: { 
-                    name: chatAttachedFile.file.name + ' → encrypted.enc',  // ← ПОКАЗЫВАЕМ, ВО ЧТО ПРЕВРАТИТСЯ
+                    name: chatAttachedFile.file.name + ' → encrypted.enc',
                     size: chatAttachedFile.file.size, 
                     type: chatAttachedFile.file.type 
                 },
@@ -1910,9 +2050,10 @@ async function chatEncrypt() {
             });
             clearAttachedFile();
         } else {
-            // Шифруем текст
-            const ctB64 = await encryptPayload(te.encode(text), AAD_MESSAGE);
-            const envelope = buildEnvelope('msg', ctB64, replyInfo);
+            // Передаем rData.mk
+            const ctB64 = await encryptPayload(te.encode(text), AAD_MESSAGE, rData.mk);
+            // Передаем rData.header
+            const envelope = buildEnvelope('msg', ctB64, replyInfo, null, rData.header);
 
             addMessageBubble({
                 side: 'mine',
@@ -1928,7 +2069,7 @@ async function chatEncrypt() {
         cancelReply();
         showStatus('success', ed25519SigningEnabled ? '✍️ Зашифровано и подписано!' : '🔒 Зашифровано!');
     } catch(e) {
-        showStatus('error','Ошибка шифрования: '+e.message);
+        showStatus('error','Ошибка шифрования: ' + e.message);
     }
 }
 
@@ -1941,13 +2082,10 @@ async function chatDecrypt() {
     const input = document.getElementById('chatInput');
     let rawText = input.value.trim();
 
-    // Также проверяем прикреплённый файл (зашифрованный .enc)
     if (!rawText && chatAttachedFile) {
-        // Пробуем прочитать содержимое файла как текст (envelope base64)
         try {
             rawText = new TextDecoder().decode(chatAttachedFile.data).trim();
         } catch(e) {
-            // Или как raw binary — это может быть старый формат
             rawText = arrayBufferToBase64(chatAttachedFile.data);
         }
         clearAttachedFile();
@@ -1959,22 +2097,28 @@ async function chatDecrypt() {
         const env = parseEnvelope(rawText);
         const originalFileName = env.fileName || 'decrypted_file';
         const aadPrefix = (env.type === 'file') ? AAD_FILE : AAD_MESSAGE;
-        const result = await decryptPayload(env.ct, aadPrefix);
 
-        // === ИЗМЕНЕНИЕ 1: передаём reply из конверта ===
+        if (!env.rh) throw new Error("Сообщение не содержит заголовка Double Ratchet.");
+
+        // 1. Получаем транзакционный слепок и ключ от ратчета
+        const ratchetResult = Ratchet.ratchetDecryptTentative(env.rh);
+
+        // 2. Пытаемся расшифровать. Если MAC или ключ неверны, выбросится ошибка!
+        const result = await decryptPayload(env.ct, aadPrefix, ratchetResult.mk);
+
+        // 3. Расшифровка успешна -> фиксируем состояние ратчета
+        Ratchet.commitState(ratchetResult.tentativeState, ratchetResult.skipKeyToRemove);
+
         const replyFromEnvelope = env.reply || null;
 
         if (env.type === 'file') {
-            const fileName = env.fileName || 'decrypted_file';
             const fileType = 'application/octet-stream';
-            const mediaType = getVerifiedMediaType(result.data);
-
             addMessageBubble({
                 side: 'friend',
                 text: null,
                 cipherText: rawText,
                 fileInfo: {
-                    name: fileName,
+                    name: originalFileName,
                     size: result.data.byteLength,
                     type: fileType,
                     downloadData: result.data
@@ -1987,7 +2131,6 @@ async function chatDecrypt() {
             });
         } else {
             const plainText = td.decode(result.data);
-
             addMessageBubble({
                 side: 'friend',
                 text: plainText,
@@ -2003,10 +2146,11 @@ async function chatDecrypt() {
         autoResizeInput();
         cancelReply();
     } catch(e) {
-        showStatus('error','Ошибка расшифровки: неверный ключ или данные повреждены');
+        // Если произошла ошибка (сбой MAC, старое сообщение, мусор),
+        // Ratchet.state остается нетронутым, сессия не ломается!
+        showStatus('error','Ошибка расшифровки: ' + e.message);
     }
 }
-
 // =====================================================================
 // ЧАТ: Файлы
 // =====================================================================
@@ -2040,8 +2184,8 @@ function autoResizeInput() {
 function destroyAllData() {
     if (!confirm('⚠️ Все ключи и данные будут уничтожены!')) return;
 
-    currentAesKey = null;
-    myEcdhKeyPair = null;
+    currentSymmetricKey = null;
+    myKxKeyPair = null;
     derivedAesKeyRaw = null;
     myPublicKeyBuffer = null;
     myEcdhFingerprintStr = '';
@@ -2054,7 +2198,19 @@ function destroyAllData() {
     ed25519VerifyEnabled = false;
     chatAttachedFile = null;
     replyToMessageId = null;
-    replyInfoCache.clear(); // === ИЗМЕНЕНИЕ 1 ===
+    isInitiatorRole = null;
+    Ratchet.state = {
+        RK: null,
+        CKs: null,
+        CKr: null,
+        DHs: null,
+        DHr: null,
+        Ns: 0,
+        Nr: 0,
+        PN: 0,
+        skipped: {}
+    };
+    replyInfoCache.clear();
 
     mediaObjectUrls.forEach(u => URL.revokeObjectURL(u));
     mediaObjectUrls = [];
