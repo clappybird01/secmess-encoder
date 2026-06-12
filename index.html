@@ -918,6 +918,7 @@ const td = new TextDecoder();
 let currentSymmetricKey = null;
 let myKxKeyPair = null;
 let myPublicKeyBuffer = null;
+let isInitiatorRole = null; // true = инициатор, false = принимающий
 let myEcdhFingerprintStr = '';
 let derivedAesKeyRaw = null;
 
@@ -1352,7 +1353,9 @@ document.getElementById('computeAndUseSharedSecret').addEventListener('click', a
         }
 
         const isInitiator = cmp < 0;
+        isInitiatorRole = isInitiator;
         Ratchet.init(currentSymmetricKey, isInitiator, friendPk, myKxKeyPair);
+        updateChatEmptyState();
 
         updateChatHeader();
         showStatus('success','✅ Ключ XChaCha20 вычислен и установлен! Перейдите в чат.');
@@ -1702,6 +1705,29 @@ function clearEmptyState() {
     if (empty) empty.remove();
 }
 
+function updateChatEmptyState() {
+    const container = document.getElementById('chatMessages');
+
+    // если уже есть сообщения — ничего не делаем
+    if (chatMessageCounter > 0) return;
+
+    let text =
+        'Установите XChaCha20-ключ на вкладке «Обмен ключами»,\nзатем переходите в чат';
+
+    if (isInitiatorRole === true) {
+        text = 'Напишите первое сообщение, чтобы начать диалог';
+    } else if (isInitiatorRole === false) {
+        text = 'Дождитесь, пока собеседник отправит первое сообщение';
+    }
+
+    container.innerHTML = `
+        <div class="chat-empty">
+            <div class="chat-empty-icon">🔐</div>
+            <div class="chat-empty-text">${text}</div>
+        </div>
+    `;
+}
+
 // === ИЗМЕНЕНИЕ 1: получение preview с учётом кэша ===
 function getMessagePreview(msgId) {
     // Сначала пробуем найти элемент в DOM
@@ -1982,14 +2008,11 @@ function downloadFileFromMsg(msgId) {
 
 function clearChat() {
     const container = document.getElementById('chatMessages');
-    container.innerHTML = `<div class="chat-empty">
-        <div class="chat-empty-icon">🔐</div>
-        <div class="chat-empty-text">Чат очищен</div>
-    </div>`;
     chatMessageCounter = 0;
-    replyInfoCache.clear(); // === ИЗМЕНЕНИЕ 1: очищаем кэш ===
+    replyInfoCache.clear();
     cancelReply();
     clearAttachedFile();
+    updateChatEmptyState();
 }
 
 // =====================================================================
@@ -2170,8 +2193,8 @@ function autoResizeInput() {
 function destroyAllData() {
     if (!confirm('⚠️ Все ключи и данные будут уничтожены!')) return;
 
-    currentAesKey = null;
-    myEcdhKeyPair = null;
+    currentSymmetricKey = null;
+    myKxKeyPair = null;
     derivedAesKeyRaw = null;
     myPublicKeyBuffer = null;
     myEcdhFingerprintStr = '';
@@ -2184,7 +2207,19 @@ function destroyAllData() {
     ed25519VerifyEnabled = false;
     chatAttachedFile = null;
     replyToMessageId = null;
-    replyInfoCache.clear(); // === ИЗМЕНЕНИЕ 1 ===
+    isInitiatorRole = null;
+    Ratchet.state = {
+        RK: null,
+        CKs: null,
+        CKr: null,
+        DHs: null,
+        DHr: null,
+        Ns: 0,
+        Nr: 0,
+        PN: 0,
+        skipped: {}
+    };
+    replyInfoCache.clear();
 
     mediaObjectUrls.forEach(u => URL.revokeObjectURL(u));
     mediaObjectUrls = [];
