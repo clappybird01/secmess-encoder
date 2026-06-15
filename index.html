@@ -746,7 +746,9 @@
 
                     <label>Мой приватный ключ (для бэкапа):</label>
                     <div class="input-wrapper">
-                        <textarea id="myEd25519PrivateKeyExport" readonly style="min-height: 60px;"></textarea>
+                        <button id="exportPrivateKeyBtn">
+                            Экспортировать приватный ключ
+                        </button>
                         <div class="input-actions">
                             <button class="action-btn" onclick="copyField('myEd25519PrivateKeyExport')" title="Копировать">📋</button>
                         </div>
@@ -906,6 +908,31 @@
 const te = new TextEncoder();
 const td = new TextDecoder();
 
+function secureZero(obj) {
+    if (!obj) return;
+
+    try {
+        if (typeof sodium !== 'undefined' && sodium.memzero) {
+            sodium.memzero(obj);
+            return;
+        }
+    } catch {}
+
+    try {
+        if (obj instanceof Uint8Array) {
+            obj.fill(0);
+        }
+
+        if (ArrayBuffer.isView(obj)) {
+            obj.fill(0);
+        }
+
+        if (obj instanceof ArrayBuffer) {
+            new Uint8Array(obj).fill(0);
+        }
+    } catch {}
+}
+
 let currentSymmetricKey = null;
 let myKxKeyPair = null;
 let myPublicKeyBuffer = null;
@@ -1031,6 +1058,7 @@ const Ratchet = {
     // ПРИМЕНЕНИЕ СОСТОЯНИЯ: Вызывается только если decryptPayload прошел успешно
     commitState: function(tentativeState, skipKeyToRemove) {
         if (skipKeyToRemove) {
+            secureZero(this.state.skipped[skipKeyToRemove]);
             delete this.state.skipped[skipKeyToRemove];
         }
         if (tentativeState) {
@@ -2183,6 +2211,25 @@ function autoResizeInput() {
 // =====================================================================
 function destroyAllData() {
     if (!confirm('⚠️ Все ключи и данные будут уничтожены!')) return;
+
+    secureZero(currentSymmetricKey);
+    secureZero(derivedAesKeyRaw);
+
+    if (myKxKeyPair) {
+        secureZero(myKxKeyPair.privateKey);
+    }
+
+    if (Ratchet.state.RK) secureZero(Ratchet.state.RK);
+    if (Ratchet.state.CKs) secureZero(Ratchet.state.CKs);
+    if (Ratchet.state.CKr) secureZero(Ratchet.state.CKr);
+
+    if (Ratchet.state.DHs?.privateKey) {
+        secureZero(Ratchet.state.DHs.privateKey);
+    }
+
+    for (const k in Ratchet.state.skipped) {
+        secureZero(Ratchet.state.skipped[k]);
+    }
 
     currentSymmetricKey = null;
     myKxKeyPair = null;
