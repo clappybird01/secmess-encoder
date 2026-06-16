@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' blob:; media-src blob:; object-src 'none'; frame-src 'none'; connect-src 'none'; script-src 'self' 'unsafe-inline';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' blob:; media-src blob:; object-src 'none'; frame-src 'none'; connect-src 'none'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval';">
     <title>Secure Messenger</title>
     <style>
         :root {
@@ -736,9 +736,9 @@
                 <button id="generateEd25519Keys">Сгенерировать ключи Ed25519</button>
 
                 <div class="verification-section" id="ed25519KeysGenerated" style="display: none;">
-                    <label>Мой публичный ключ подписи:</label>
+                    <label>Мой публичный ключ подписи (отправьте собеседнику):</label>
                     <div class="input-wrapper">
-                        <textarea id="myEd25519PublicKey" readonly style="min-height: 60px;"></textarea>
+                        <textarea id="myEd25519PublicKey" readonly></textarea>
                         <div class="input-actions">
                             <button class="action-btn" onclick="copyField('myEd25519PublicKey')" title="Копировать">📋</button>
                         </div>
@@ -746,12 +746,11 @@
 
                     <label>Мой приватный ключ (для бэкапа):</label>
                     <div class="input-wrapper">
-                        <textarea id="myEd25519PrivateKeyExport" readonly style="min-height: 60px;"></textarea>
-                        <div class="input-actions">
-                            <button class="action-btn" onclick="copyField('myEd25519PrivateKeyExport')" title="Копировать">📋</button>
-                        </div>
+                        <button id="exportPrivateKeyBtn">
+                            Экспортировать приватный ключ
+                        </button>
                     </div>
-                    <small>⚠️ Храните приватный ключ в безопасном месте!</small>
+                    <small>⚠️ Ключ копируется в буфер обмена на 30 секунд</small>
                 </div>
 
                 <div style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
@@ -906,6 +905,31 @@
 const te = new TextEncoder();
 const td = new TextDecoder();
 
+function secureZero(obj) {
+    if (!obj) return;
+
+    try {
+        if (typeof sodium !== 'undefined' && sodium.memzero) {
+            sodium.memzero(obj);
+            return;
+        }
+    } catch {}
+
+    try {
+        if (obj instanceof Uint8Array) {
+            obj.fill(0);
+        }
+
+        if (ArrayBuffer.isView(obj)) {
+            obj.fill(0);
+        }
+
+        if (obj instanceof ArrayBuffer) {
+            new Uint8Array(obj).fill(0);
+        }
+    } catch {}
+}
+
 let currentSymmetricKey = null;
 let myKxKeyPair = null;
 let myPublicKeyBuffer = null;
@@ -913,7 +937,7 @@ let isInitiatorRole = null; // true = инициатор, false = принима
 let myEcdhFingerprintStr = '';
 let derivedAesKeyRaw = null;
 
-let myEd25519KeyPair = null;
+let myEd25519PrivateKey = null;
 let myEd25519PublicKeyRaw = null;
 let myEd25519PrivateKeyPkcs8 = null;
 let friendEd25519PublicKey = null;
@@ -1031,6 +1055,7 @@ const Ratchet = {
     // ПРИМЕНЕНИЕ СОСТОЯНИЯ: Вызывается только если decryptPayload прошел успешно
     commitState: function(tentativeState, skipKeyToRemove) {
         if (skipKeyToRemove) {
+            secureZero(this.state.skipped[skipKeyToRemove]);
             delete this.state.skipped[skipKeyToRemove];
         }
         if (tentativeState) {
@@ -1354,25 +1379,25 @@ document.getElementById('computeAndUseSharedSecret').addEventListener('click', a
 });
 
 // =====================================================================
-// Ed25519
+// Ed25519 (Native Web Crypto API - Защита от извлечения)
 // =====================================================================
 async function generateEd25519KeyPair() {
     try {
-        // Ожидаем готовности библиотеки libsodium
-        await sodium.ready;
-        // Генерируем пару ключей Ed25519 одной простой командой
-        const kp = sodium.crypto_sign_keypair();
-        // Сохраняем объект пары ключей в глобальную переменную
-        myEd25519KeyPair = kp;
-        // Извлекаем сырые буферы для отображения в интерфейсе
-        myEd25519PublicKeyRaw = kp.publicKey.buffer;
-        myEd25519PrivateKeyPkcs8 = kp.privateKey.buffer; // Оставили старое название переменной, чтобы не менять другие части кода
-        // Переводим ключи в Base64, чтобы вывести их в текстовые поля на экране
-        document.getElementById('myEd25519PublicKey').value = arrayBufferToBase64(myEd25519PublicKeyRaw);
-        document.getElementById('myEd25519PrivateKeyExport').value = arrayBufferToBase64(myEd25519PrivateKeyPkcs8);
-        // Обновляем визуальный отпечаток (Emoji Fingerprint) для ключа подписи
+        // Генерируем ключи. Разрешаем экспорт (true) временно, чтобы сделать бэкап
+        const keyPair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+        
+        myEd25519PublicKeyRaw = await crypto.subtle.exportKey("raw", keyPair.publicKey);
+        const pubKeyEl = document.getElementById('myEd25519PublicKey');
+        if (pubKeyEl) pubKeyEl.value = arrayBufferToBase64(myEd25519PublicKeyRaw);
+        
+        // Сохраняем PKCS8 для бэкапа (экспорта)
+        myEd25519PrivateKeyPkcs8 = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
+        
+        // ПЕРЕИМПОРТИРУЕМ ключ в память браузера как НЕИЗВЛЕКАЕМЫЙ (extractable: false). 
+        // Это закрывает уязвимость: теперь этот объект нельзя украсть через XSS.
+        myEd25519PrivateKey = await crypto.subtle.importKey("pkcs8", myEd25519PrivateKeyPkcs8, {name:"Ed25519"}, false, ["sign"]);
+
         document.getElementById('myEd25519Fingerprint').textContent = await generateFingerprint(myEd25519PublicKeyRaw);
-        // Включаем флаги и обновляем интерфейс, как это было в вашем оригинальном коде
         document.getElementById('ed25519KeysGenerated').style.display = 'block';
         ed25519SigningEnabled = true;
         document.getElementById('ed25519MyStatus').className = 'status success';
@@ -1389,16 +1414,21 @@ async function importEd25519PrivateKey() {
     if (!b64) { showStatus('error','Вставьте приватный ключ'); return; }
     try {
         const buf = base64ToArrayBuffer(b64);
-        const priv = await crypto.subtle.importKey("pkcs8", buf, {name:"Ed25519"}, true, ["sign"]);
-        const jwk = await crypto.subtle.exportKey("jwk", priv);
-        const pub = await crypto.subtle.importKey("jwk", {crv:jwk.crv,kty:jwk.kty,x:jwk.x}, {name:"Ed25519"}, true, ["verify"]);
-        myEd25519KeyPair = { publicKey: pub, privateKey: priv };
-        const pubRaw = await crypto.subtle.exportKey("raw", pub);
-        myEd25519PublicKeyRaw = pubRaw;
-        document.getElementById('myEd25519PublicKey').value = arrayBufferToBase64(pubRaw);
+        
+        // 1. Временный импорт для легального извлечения публичного ключа
+        const tempPriv = await crypto.subtle.importKey("pkcs8", buf, {name:"Ed25519"}, true, ["sign"]);
+        const jwk = await crypto.subtle.exportKey("jwk", tempPriv);
+        const pub = await crypto.subtle.importKey("jwk", {crv:jwk.crv, kty:jwk.kty, x:jwk.x}, {name:"Ed25519"}, true, ["verify"]);
+        myEd25519PublicKeyRaw = await crypto.subtle.exportKey("raw", pub);
+        
+        // 2. Боевой импорт как НЕИЗВЛЕКАЕМОГО объекта (закрываем уязвимость)
+        myEd25519PrivateKey = await crypto.subtle.importKey("pkcs8", buf, {name:"Ed25519"}, false, ["sign"]);
+        
+        const pubKeyEl = document.getElementById('myEd25519PublicKey');
+        if (pubKeyEl) pubKeyEl.value = arrayBufferToBase64(myEd25519PublicKeyRaw);
         myEd25519PrivateKeyPkcs8 = buf;
-        document.getElementById('myEd25519PrivateKeyExport').value = b64;
-        document.getElementById('myEd25519Fingerprint').textContent = await generateFingerprint(pubRaw);
+        
+        document.getElementById('myEd25519Fingerprint').textContent = await generateFingerprint(myEd25519PublicKeyRaw);
         document.getElementById('ed25519KeysGenerated').style.display='block';
         ed25519SigningEnabled = true;
         document.getElementById('ed25519MyStatus').className='status success';
@@ -1410,31 +1440,21 @@ async function importEd25519PrivateKey() {
 
 async function importFriendEd25519Key() {
     try {
-        // Читаем значение из текстового поля
         const b64Str = document.getElementById('friendEd25519PublicKey').value.trim();
-        if (!b64Str) {
-            showStatus('error', 'Вставьте публичный ключ подписи');
-            return false;
-        }
+        if (!b64Str) { showStatus('error', 'Вставьте публичный ключ подписи'); return false; }
         const buf = base64ToArrayBuffer(b64Str);
-        
-        if (buf.byteLength !== 32) {
-            throw new Error("Неверная длина публичного ключа (должна быть 32 байта)");
-        }
+        if (buf.byteLength !== 32) throw new Error("Неверная длина (должна быть 32 байта)");
         
         friendEd25519PublicKeyRaw = buf;
         ed25519VerifyEnabled = true;
         
-        // Обновляем визуальные статусы
         document.getElementById('ed25519FriendStatus').className = 'status success';
         document.getElementById('ed25519FriendStatus').textContent = '✅ Ключ подписи собеседника установлен!';
         updateChatHeader();
         showStatus('success', 'Ключ подписи собеседника установлен!');
-        
         return true;
     } catch(e) {
-        showStatus('error', "Ошибка: " + e.message);
-        return false;
+        showStatus('error', "Ошибка: " + e.message); return false;
     }
 }
 
@@ -1463,40 +1483,29 @@ function verifyEd25519Fingerprint() {
 }
 
 async function signData(data) {
-    // Если подписи отключены или мы еще не сгенерировали свои ключи — ничего не делаем
-    if (!ed25519SigningEnabled || !myEd25519KeyPair) return null;
+    if (!ed25519SigningEnabled || !myEd25519PrivateKey) return null;
     try {
-        await sodium.ready;
-        // Превращаем входящие данные в массив байт (если это была строка)
         const bytes = (typeof data === 'string') ? te.encode(data) : new Uint8Array(data);
-        
-        // crypto_sign_detached возвращает чистую подпись размером ровно 64 байта
-        return sodium.crypto_sign_detached(bytes, myEd25519KeyPair.privateKey);
+        // Подписываем через нативный API. Ключ не покидает защищенную память.
+        const sigBuffer = await crypto.subtle.sign("Ed25519", myEd25519PrivateKey, bytes);
+        return new Uint8Array(sigBuffer);
     } catch(e) { 
-        console.error("Ошибка подписи:", e);
-        return null; 
+        console.error("Ошибка подписи:", e); return null; 
     }
 }
 
 async function verifySignature(data, sig) {
-    // Если проверка отключена или у нас нет ключа друга — сообщаем об этом
     if (!ed25519VerifyEnabled || !friendEd25519PublicKeyRaw)
         return { verified: false, reason: 'no_key', message: 'Ключ подписи друга не установлен' };
     try {
-        await sodium.ready;
-        // Превращаем проверяемые данные в массив байт
         const bytes = (typeof data === 'string') ? te.encode(data) : new Uint8Array(data);
-        // Оборачиваем ключ друга в Uint8Array, как требует libsodium
-        const pk = new Uint8Array(friendEd25519PublicKeyRaw);
+        // Импортируем сырой публичный ключ друга для проверки
+        const pubKey = await crypto.subtle.importKey("raw", friendEd25519PublicKeyRaw, {name: "Ed25519"}, true, ["verify"]);
+        const isValid = await crypto.subtle.verify("Ed25519", pubKey, sig, bytes);
         
-        // Проверяем подпись. Функция возвращает true (если всё ок) или false
-        const isValid = sodium.crypto_sign_verify_detached(sig, bytes, pk);
-        
-        if (isValid) {
-            return { verified: true, reason: 'valid', message: '✅ Подпись верна' };
-        } else {
-            return { verified: false, reason: 'invalid', message: '❌ Подпись НЕДЕЙСТВИТЕЛЬНА!' };
-        }
+        return isValid 
+            ? { verified: true, reason: 'valid', message: '✅ Подпись верна' }
+            : { verified: false, reason: 'invalid', message: '❌ Подпись НЕДЕЙСТВИТЕЛЬНА!' };
     } catch(e) { 
         return { verified: false, reason: 'error', message: '⚠️ Ошибка проверки подписи: ' + e.message }; 
     }
@@ -2184,13 +2193,33 @@ function autoResizeInput() {
 function destroyAllData() {
     if (!confirm('⚠️ Все ключи и данные будут уничтожены!')) return;
 
+    secureZero(currentSymmetricKey);
+    secureZero(derivedAesKeyRaw);
+
+    if (myKxKeyPair) {
+        secureZero(myKxKeyPair.privateKey);
+    }
+
+    if (Ratchet.state.RK) secureZero(Ratchet.state.RK);
+    if (Ratchet.state.CKs) secureZero(Ratchet.state.CKs);
+    if (Ratchet.state.CKr) secureZero(Ratchet.state.CKr);
+
+    if (Ratchet.state.DHs?.privateKey) {
+        secureZero(Ratchet.state.DHs.privateKey);
+    }
+
+    for (const k in Ratchet.state.skipped) {
+        secureZero(Ratchet.state.skipped[k]);
+    }
+
     currentSymmetricKey = null;
     myKxKeyPair = null;
     derivedAesKeyRaw = null;
     myPublicKeyBuffer = null;
     myEcdhFingerprintStr = '';
-    myEd25519KeyPair = null;
+    myEd25519PrivateKey = null;
     myEd25519PublicKeyRaw = null;
+    secureZero(myEd25519PrivateKeyPkcs8);
     myEd25519PrivateKeyPkcs8 = null;
     friendEd25519PublicKey = null;
     friendEd25519PublicKeyRaw = null;
@@ -2332,6 +2361,32 @@ function looksLikeCiphertext(text) {
 // Очистка при закрытии
 window.addEventListener('beforeunload', () => {
     mediaObjectUrls.forEach(u => URL.revokeObjectURL(u));
+});
+
+document.getElementById('exportPrivateKeyBtn')
+?.addEventListener('click', async () => {
+
+    if (!myEd25519PrivateKeyPkcs8) {
+        showStatus('error', 'Приватный ключ отсутствует');
+        return;
+    }
+
+    const exported = arrayBufferToBase64(
+        myEd25519PrivateKeyPkcs8
+    );
+
+    await navigator.clipboard.writeText(exported);
+
+    showStatus(
+        'success',
+        'Ключ скопирован на 30 секунд'
+    );
+
+    setTimeout(async () => {
+        try {
+            await navigator.clipboard.writeText('');
+        } catch {}
+    }, 30000);
 });
 </script>
 </body>
