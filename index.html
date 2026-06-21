@@ -315,7 +315,6 @@
             display: flex; flex-direction: column; height: 82vh; min-height: 500px;
             border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden;
             background: var(--card-bg); box-shadow: var(--shadow);
-            /* === ИЗМЕНЕНИЕ 4: возможность ресайза по вертикали === */
             resize: vertical;
             overflow: auto;
         }
@@ -332,7 +331,7 @@
             flex: 1; overflow-y: auto; padding: 16px;
             background: var(--chat-bg);
             display: flex; flex-direction: column; gap: 8px;
-            min-height: 0; /* важно для flex внутри resize */
+            min-height: 0;
         }
 
         .chat-messages::-webkit-scrollbar { width: 6px; }
@@ -551,7 +550,6 @@
 
         /* Tooltip для кнопок */
         .chat-send-btn[title]::after { content: none; }
-        /* ===== ДОПОЛНИТЕЛЬНЫЕ СТИЛИ (Голосовые и IRC) ===== */
         
         /* Анимация записи голосового */
         .recording-active { 
@@ -710,7 +708,7 @@
                     • Шифрование: XChaCha20-Poly1305 (IETF) с AAD и timestamp<br>
                     • Подписи: Ed25519 (libsodium-detached, вкладка «Подписи»)<br>
                     • Защита от replay: проверка времени сообщения (>5 мин = предупреждение)<br>
-                    • Защита от подмены контекста: AAD разделён для сообщений и файлов<br>
+                    • Метаданные (Reply/Файлы): Упакованы и зашифрованы внутри payload (Envelope v4)<br>
                     • Изолированные ключи шифрования (защита памяти внутри WebAssembly)<br>
                     • Отпечатки: SHA-512 → Base64URL (96 бит) + 6 эмодзи (30 бит энтропии)<br>
                     • Perfect Forward Secrecy: каждая сессия — новые X25519-ключи
@@ -730,7 +728,6 @@
     </div>
 
         <div class="row">
-            <!-- === ИЗМЕНЕНИЕ 3: блок "Мои ключи подписи" — отпечаток перенесён вниз === -->
             <div class="card">
                 <h3>🔑 Мои ключи подписи</h3>
                 <button id="generateEd25519Keys">Сгенерировать ключи Ed25519</button>
@@ -765,7 +762,6 @@
                     <button id="importEd25519PrivateKey">Импортировать</button>
                 </div>
 
-                <!-- === ОТПЕЧАТОК ПЕРЕНЕСЁН СЮДА (после кнопок импорта) === -->
                 <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border-color);">
                     <h4>🔍 Отпечаток моего ключа подписи:</h4>
                     <div class="input-wrapper">
@@ -779,7 +775,6 @@
                 <div class="status info" id="ed25519MyStatus">Ключи подписи не сгенерированы</div>
             </div>
 
-            <!-- === ИЗМЕНЕНИЕ 3: блок "Ключ подписи собеседника" — отпечаток перенесён вниз === -->
             <div class="card">
                 <h3>👤 Ключ подписи собеседника</h3>
                 <label>Публичный ключ подписи собеседника:</label>
@@ -792,7 +787,6 @@
                 </div>
                 <button id="importFriendEd25519Key">Установить ключ собеседника</button>
 
-                <!-- === ОТПЕЧАТОК ПЕРЕНЕСЁН СЮДА (после кнопки установки) === -->
                 <div class="comparison-section" id="friendEd25519Verification" style="display: none;">
                     <h4>🔍 Сверка отпечатков</h4>
                     <div><strong>Отпечаток (вычислен):</strong></div>
@@ -933,7 +927,7 @@ function secureZero(obj) {
 let currentSymmetricKey = null;
 let myKxKeyPair = null;
 let myPublicKeyBuffer = null;
-let isInitiatorRole = null; // true = инициатор, false = принимающий
+let isInitiatorRole = null; 
 let myEcdhFingerprintStr = '';
 let derivedAesKeyRaw = null;
 
@@ -947,12 +941,12 @@ let ed25519VerifyEnabled = false;
 
 // Чат
 let chatMessageCounter = 0;
-let chatAttachedFile = null;      // { file: File, data: ArrayBuffer }
-let replyToMessageId = null;      // id сообщения, на которое отвечаем
-let mediaObjectUrls = [];         // для отзыва blob-URL при уничтожении
+let chatAttachedFile = null;      
+let replyToGlobalId = null;       // [ИСПРАВЛЕНО] Глобальный ID (UUID) вместо локального ID
+const globalToLocalMap = new Map(); // [НОВОЕ] Связка: globalId -> localMsgId (для авто-скролла)
+let mediaObjectUrls = [];         
 
-// === ИЗМЕНЕНИЕ 1: кэш для reply-информации (чтобы показывать preview, даже если сообщение не найдено) ===
-const replyInfoCache = new Map(); // msgId -> { sender, preview, exists }
+const replyInfoCache = new Map(); // gId -> { sender, preview, exists }
 
 const HKDF_INFO = te.encode("ECDH-P384-AES256-KEY-DERIVATION-V2");
 const AAD_MESSAGE = te.encode("SecureMessenger-MSG");
@@ -970,10 +964,10 @@ const themeNames = { cream:'Кремовая', dark:'Тёмная', rose:'Роз
 // УТИЛИТЫ
 // =====================================================================
 
-// DOUBLE RATCHET ENGINE (Strict Signal Protocol Implementation)
+// DOUBLE RATCHET ENGINE
 const Ratchet = {
     state: { RK: null, CKs: null, CKr: null, DHs: null, DHr: null, Ns: 0, Nr: 0, PN: 0, skipped: {} },
-    MAX_SKIP: 100, // Лимит на пропуск сообщений (защита от DoS)
+    MAX_SKIP: 100, 
 
     KDF_RK: function(rk, dh_out) {
         const out = sodium.crypto_generichash(64, dh_out, rk);
@@ -1013,16 +1007,12 @@ const Ratchet = {
         return { mk: kdf.MK, header: header };
     },
 
-    // ТРАНЗАКЦИОННАЯ РАСШИФРОВКА: Возвращает ключ и временное состояние, не трогая основное
     ratchetDecryptTentative: function(header) {
         const skipKey = header.dh + '_' + header.n;
-        
-        // 1. Сообщение пришло с опозданием (ключ уже пропущен и сохранен)
         if (this.state.skipped[skipKey]) {
             return { mk: this.state.skipped[skipKey], tentativeState: null, skipKeyToRemove: skipKey };
         }
 
-        // 2. Делаем глубокую копию состояния, чтобы не "отравить" его при ошибке MAC
         let tempState = {
             RK: new Uint8Array(this.state.RK),
             CKs: this.state.CKs ? new Uint8Array(this.state.CKs) : null,
@@ -1034,17 +1024,12 @@ const Ratchet = {
         };
 
         const dh_pub = new Uint8Array(base64ToArrayBuffer(header.dh));
-
-        // Если DH-ключ собеседника изменился — крутим корневой ратчет
         if (!tempState.DHr || arrayBufferToBase64(tempState.DHr) !== header.dh) {
             this.skipMessageKeys(tempState, header.pn);
             this.DHRatchetStep(tempState, dh_pub);
         }
-
-        // Пропускаем ключи в текущей цепочке, если сообщение из будущего
         this.skipMessageKeys(tempState, header.n);
         
-        // Вычисляем Message Key
         const kdf = this.KDF_CK(tempState.CKr);
         tempState.CKr = kdf.CK;
         tempState.Nr++;
@@ -1052,7 +1037,6 @@ const Ratchet = {
         return { mk: kdf.MK, tentativeState: tempState, skipKeyToRemove: null };
     },
 
-    // ПРИМЕНЕНИЕ СОСТОЯНИЯ: Вызывается только если decryptPayload прошел успешно
     commitState: function(tentativeState, skipKeyToRemove) {
         if (skipKeyToRemove) {
             secureZero(this.state.skipped[skipKeyToRemove]);
@@ -1097,7 +1081,7 @@ const Ratchet = {
 
 function arrayBufferToBase64(buffer) {
     const bytes = new Uint8Array(buffer);
-    const CHUNK_SIZE = 0x8000; // 32KB chunks
+    const CHUNK_SIZE = 0x8000; 
     let binary = '';
     for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
         const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.length));
@@ -1288,7 +1272,6 @@ async function updateFriendEcdhFingerprint() {
     if (!b64) return;
     try {
         const buf = base64ToArrayBuffer(b64);
-        // Libsodium X25519 ключ всегда строго 32 байта
         if (buf.byteLength !== 32) { 
             fp.textContent = '❌ Неверный размер ключа X25519'; 
             block.style.display = 'block'; 
@@ -1316,14 +1299,11 @@ function verifyEcdhFingerprint() {
     }
 }
 
-// Генерация ECDH
 document.getElementById('generateEcdhKeys').addEventListener('click', async () => {
     try {
         await sodium.ready;
-        // Генерируем ключи X25519
         myKxKeyPair = sodium.crypto_kx_keypair();
-        
-        myPublicKeyBuffer = myKxKeyPair.publicKey.buffer; // Сохраняем как ArrayBuffer для совместимости с вашим кодом
+        myPublicKeyBuffer = myKxKeyPair.publicKey.buffer; 
         document.getElementById('ecdhPublicKey').value = arrayBufferToBase64(myPublicKeyBuffer);
         
         myEcdhFingerprintStr = await generateFingerprint(myPublicKeyBuffer);
@@ -1332,7 +1312,6 @@ document.getElementById('generateEcdhKeys').addEventListener('click', async () =
     } catch(e) { showStatus('error','Ошибка: '+e.message); }
 });
 
-// ОБЪЕДИНЁННАЯ КНОПКА: Вычислить + Установить
 document.getElementById('computeAndUseSharedSecret').addEventListener('click', async () => {
     try {
         await sodium.ready;
@@ -1346,21 +1325,15 @@ document.getElementById('computeAndUseSharedSecret').addEventListener('click', a
             showStatus('error', 'Неверная длина публичного ключа X25519'); return;
         }
 
-        // Вычисляем общий секрет с помощью X25519
         const sharedSecret = sodium.crypto_scalarmult(myKxKeyPair.privateKey, friendPk);
-        
-        // Получаем уникальную соль для сессии (используем вашу функцию deriveSessionSalt)
         const salt = await deriveSessionSalt(myPublicKeyBuffer, friendBuf);
-        
-        // Надежно выводим финальный симметричный ключ (HKDF -> BLAKE2b)
         const keyMaterial = new Uint8Array(sharedSecret.length + salt.length);
         keyMaterial.set(sharedSecret, 0);
         keyMaterial.set(salt, sharedSecret.length);
         
-        // Ключ для XChaCha20-Poly1305 должен быть 32 байта
         currentSymmetricKey = sodium.crypto_generichash(sodium.crypto_aead_xchacha20poly1305_ietf_KEYBYTES, keyMaterial);
-        derivedAesKeyRaw = currentSymmetricKey; // Для обратной совместимости ваших переменных
-        // === ИНИЦИАЛИЗАЦИЯ DOUBLE RATCHET ===
+        derivedAesKeyRaw = currentSymmetricKey; 
+
         const a = new Uint8Array(myPublicKeyBuffer);
         let cmp = 0;
         for (let i = 0; i < 32; i++) {
@@ -1379,22 +1352,16 @@ document.getElementById('computeAndUseSharedSecret').addEventListener('click', a
 });
 
 // =====================================================================
-// Ed25519 (Native Web Crypto API - Защита от извлечения)
+// Ed25519 
 // =====================================================================
 async function generateEd25519KeyPair() {
     try {
-        // Генерируем ключи. Разрешаем экспорт (true) временно, чтобы сделать бэкап
         const keyPair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
-        
         myEd25519PublicKeyRaw = await crypto.subtle.exportKey("raw", keyPair.publicKey);
         const pubKeyEl = document.getElementById('myEd25519PublicKey');
         if (pubKeyEl) pubKeyEl.value = arrayBufferToBase64(myEd25519PublicKeyRaw);
         
-        // Сохраняем PKCS8 для бэкапа (экспорта)
         myEd25519PrivateKeyPkcs8 = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
-        
-        // ПЕРЕИМПОРТИРУЕМ ключ в память браузера как НЕИЗВЛЕКАЕМЫЙ (extractable: false). 
-        // Это закрывает уязвимость: теперь этот объект нельзя украсть через XSS.
         myEd25519PrivateKey = await crypto.subtle.importKey("pkcs8", myEd25519PrivateKeyPkcs8, {name:"Ed25519"}, false, ["sign"]);
 
         document.getElementById('myEd25519Fingerprint').textContent = await generateFingerprint(myEd25519PublicKeyRaw);
@@ -1414,14 +1381,10 @@ async function importEd25519PrivateKey() {
     if (!b64) { showStatus('error','Вставьте приватный ключ'); return; }
     try {
         const buf = base64ToArrayBuffer(b64);
-        
-        // 1. Временный импорт для легального извлечения публичного ключа
         const tempPriv = await crypto.subtle.importKey("pkcs8", buf, {name:"Ed25519"}, true, ["sign"]);
         const jwk = await crypto.subtle.exportKey("jwk", tempPriv);
         const pub = await crypto.subtle.importKey("jwk", {crv:jwk.crv, kty:jwk.kty, x:jwk.x}, {name:"Ed25519"}, true, ["verify"]);
         myEd25519PublicKeyRaw = await crypto.subtle.exportKey("raw", pub);
-        
-        // 2. Боевой импорт как НЕИЗВЛЕКАЕМОГО объекта (закрываем уязвимость)
         myEd25519PrivateKey = await crypto.subtle.importKey("pkcs8", buf, {name:"Ed25519"}, false, ["sign"]);
         
         const pubKeyEl = document.getElementById('myEd25519PublicKey');
@@ -1486,7 +1449,6 @@ async function signData(data) {
     if (!ed25519SigningEnabled || !myEd25519PrivateKey) return null;
     try {
         const bytes = (typeof data === 'string') ? te.encode(data) : new Uint8Array(data);
-        // Подписываем через нативный API. Ключ не покидает защищенную память.
         const sigBuffer = await crypto.subtle.sign("Ed25519", myEd25519PrivateKey, bytes);
         return new Uint8Array(sigBuffer);
     } catch(e) { 
@@ -1499,7 +1461,6 @@ async function verifySignature(data, sig) {
         return { verified: false, reason: 'no_key', message: 'Ключ подписи друга не установлен' };
     try {
         const bytes = (typeof data === 'string') ? te.encode(data) : new Uint8Array(data);
-        // Импортируем сырой публичный ключ друга для проверки
         const pubKey = await crypto.subtle.importKey("raw", friendEd25519PublicKeyRaw, {name: "Ed25519"}, true, ["verify"]);
         const isValid = await crypto.subtle.verify("Ed25519", pubKey, sig, bytes);
         
@@ -1512,24 +1473,13 @@ async function verifySignature(data, sig) {
 }
 
 // =====================================================================
-// ЧАТ: шифрование / расшифровка
+// ЧАТ: упаковка Payload (ИСПРАВЛЕНО ДЛЯ СОКРЫТИЯ МЕТАДАННЫХ)
 // =====================================================================
 
-// Формат шифрованного сообщения (v2 с reply):
-// JSON envelope Base64:
-// {
-//   "v": 2,
-//   "type": "msg" | "file",
-//   "ct": "<base64 шифротекст как раньше>",
-//   "reply": { "id": <number>, "preview": "<text preview>", "sender": "<отправитель>" } | null,
-//   "fileName": "...",   // только для файлов
-//   "fileType": "..."    // только для файлов
-// }
-
-function buildEnvelope(type, ciphertextBase64, replyInfo, fileName = null, ratchetHeader = null) {
-    const env = { v: 3, type, ct: ciphertextBase64 };
-    if (replyInfo) env.reply = replyInfo;
-    if (fileName) env.fileName = fileName;
+// Формат Envelope v4: { v: 4, type: "msg" | "file", ct: "...", rh: {...} }
+// Полностью скрывает replyInfo и fileName
+function buildEnvelope(type, ciphertextBase64, ratchetHeader = null) {
+    const env = { v: 4, type, ct: ciphertextBase64 };
     if (ratchetHeader) env.rh = ratchetHeader;
     return btoa(unescape(encodeURIComponent(JSON.stringify(env))));
 }
@@ -1537,16 +1487,43 @@ function buildEnvelope(type, ciphertextBase64, replyInfo, fileName = null, ratch
 function parseEnvelope(text) {
     try {
         const json = JSON.parse(decodeURIComponent(escape(atob(text))));
-        if ((json.v === 2 || json.v === 3) && json.ct) return {
+        if ((json.v >= 2 && json.v <= 4) && json.ct) return {
             v: json.v, 
             type: json.type, 
             ct: json.ct, 
-            reply: json.reply,
-            fileName: json.fileName,
+            reply: json.reply, // Для старых версий < 4
+            fileName: json.fileName, // Для старых версий < 4
             rh: json.rh
         };
     } catch(e) {}
     return { v: 1, type: 'msg', ct: text, reply: null, fileName: null, rh: null };
+}
+
+// Упаковка метаданных + бинарных файлов в один внутренний буфер
+function packPayload(metadata, binaryData = null) {
+    const metaBytes = te.encode(JSON.stringify(metadata));
+    const metaLen = metaBytes.length;
+    let totalLen = 4 + metaLen;
+    if (binaryData) totalLen += binaryData.byteLength;
+    
+    const out = new Uint8Array(totalLen);
+    const view = new DataView(out.buffer);
+    view.setUint32(0, metaLen, true); 
+    out.set(metaBytes, 4);
+    if (binaryData) {
+        out.set(new Uint8Array(binaryData), 4 + metaLen);
+    }
+    return out;
+}
+
+// Распаковка внутреннего буфера в метаданные и файл
+function unpackPayload(bytes) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const metaLen = view.getUint32(0, true);
+    const metaBytes = bytes.subarray(4, 4 + metaLen);
+    const metadata = JSON.parse(td.decode(metaBytes));
+    const binaryData = bytes.byteLength > 4 + metaLen ? bytes.subarray(4 + metaLen) : null;
+    return { metadata, binaryData };
 }
 
 async function encryptPayload(plainBytes, aadPrefix, messageKey) {
@@ -1557,7 +1534,6 @@ async function encryptPayload(plainBytes, aadPrefix, messageKey) {
     const aad = new Uint8Array(aadPrefix.length + timestamp.length);
     aad.set(aadPrefix, 0); aad.set(timestamp, aadPrefix.length);
 
-    // Используем переданный messageKey вместо глобального currentSymmetricKey
     const encrypted = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
         plainBytes, aad, null, nonce, messageKey
     );
@@ -1610,7 +1586,6 @@ async function decryptPayload(ctBase64, aadPrefix, messageKey) {
 
     let decrypted;
     try {
-        // Используем переданный messageKey
         decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
             null, encrypted, aad, nonce, messageKey
         );
@@ -1643,13 +1618,11 @@ async function toggleVoiceRecord() {
     const btn = document.getElementById('btnVoiceRecord');
     
     if (isVoiceRecording) {
-        // Остановка записи
         mediaRecorder.stop();
         btn.textContent = '🎤';
         btn.classList.remove('recording-active');
         isVoiceRecording = false;
     } else {
-        // Старт записи
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaRecorder = new MediaRecorder(stream);
@@ -1660,21 +1633,16 @@ async function toggleVoiceRecord() {
             };
             
             mediaRecorder.onstop = () => {
-                // Упаковываем запись в Blob и конвертируем в File для стандартного шифрования
                 const blob = new Blob(audioChunks, { type: 'audio/webm' });
                 const fileName = `Voice_${formatTime(new Date()).replace(':','-')}.webm`;
                 const file = new File([blob], fileName, { type: 'audio/webm' });
-                
-                // Отправляем в твой стандартный пайплайн файлов
                 attachFile(file);
-                
-                // Отключаем микрофон, чтобы не горел индикатор в браузере
                 stream.getTracks().forEach(track => track.stop());
             };
             
             mediaRecorder.start();
             isVoiceRecording = true;
-            btn.textContent = '⏹️'; // Меняем иконку на "стоп"
+            btn.textContent = '⏹️';
             btn.classList.add('recording-active');
         } catch (e) {
             showStatus('error', 'Доступ к микрофону запрещен или недоступен.');
@@ -1707,13 +1675,9 @@ function clearEmptyState() {
 
 function updateChatEmptyState() {
     const container = document.getElementById('chatMessages');
-
-    // если уже есть сообщения — ничего не делаем
     if (chatMessageCounter > 0) return;
 
-    let text =
-        'Установите XChaCha20-ключ на вкладке «Обмен ключами»,\nзатем переходите в чат';
-
+    let text = 'Установите XChaCha20-ключ на вкладке «Обмен ключами»,\nзатем переходите в чат';
     if (isInitiatorRole === true) {
         text = 'Напишите первое сообщение, чтобы начать диалог';
     } else if (isInitiatorRole === false) {
@@ -1728,37 +1692,38 @@ function updateChatEmptyState() {
     `;
 }
 
-// === ИЗМЕНЕНИЕ 1: получение preview с учётом кэша ===
-function getMessagePreview(msgId) {
-    // Сначала пробуем найти элемент в DOM
-    const el = document.getElementById('msg-' + msgId);
-    if (el) {
-        const textEl = el.querySelector('.msg-text');
-        if (textEl) {
-            const txt = textEl.textContent;
-            return txt.length > 60 ? txt.slice(0,60)+'…' : txt;
+function getMessagePreview(gId) {
+    const localId = globalToLocalMap.get(gId);
+    if (localId) {
+        const el = document.getElementById('msg-' + localId);
+        if (el) {
+            const textEl = el.querySelector('.msg-text');
+            if (textEl) {
+                const txt = textEl.textContent;
+                return txt.length > 60 ? txt.slice(0,60)+'…' : txt;
+            }
+            const fileEl = el.querySelector('.msg-file-name');
+            if (fileEl) return '📎 ' + fileEl.textContent;
         }
-        const fileEl = el.querySelector('.msg-file-name');
-        if (fileEl) return '📎 ' + fileEl.textContent;
     }
-    // Если нет в DOM — ищем в кэше
-    const cached = replyInfoCache.get(msgId);
+    const cached = replyInfoCache.get(gId);
     if (cached) return cached.preview;
     return '…';
 }
 
-function getMessageSender(msgId) {
-    const el = document.getElementById('msg-' + msgId);
-    if (el) {
-        return el.classList.contains('msg-mine') ? 'Вы' : 'Собеседник';
+function getMessageSender(gId) {
+    const localId = globalToLocalMap.get(gId);
+    if (localId) {
+        const el = document.getElementById('msg-' + localId);
+        if (el) return el.classList.contains('msg-mine') ? 'Вы' : 'Собеседник';
     }
-    const cached = replyInfoCache.get(msgId);
+    const cached = replyInfoCache.get(gId);
     if (cached) return cached.sender;
     return '';
 }
 
-// === ИЗМЕНЕНИЕ 1: регистрация сообщения в кэше при создании ===
-function registerMessageInCache(msgId, side, text, fileName) {
+function registerMessageInCache(gId, side, text, fileName) {
+    if (!gId) return;
     const sender = side === 'mine' ? 'Вы' : 'Собеседник';
     let preview;
     if (text) {
@@ -1768,15 +1733,14 @@ function registerMessageInCache(msgId, side, text, fileName) {
     } else {
         preview = '…';
     }
-    replyInfoCache.set(msgId, { sender, preview, exists: true });
+    replyInfoCache.set(gId, { sender, preview, exists: true });
 }
 
-// Reply
-function setReplyTo(msgId) {
-    replyToMessageId = msgId;
+function setReplyTo(gId) {
+    replyToGlobalId = gId;
     const bar = document.getElementById('chatReplyBar');
-    const sender = getMessageSender(msgId);
-    const preview = getMessagePreview(msgId);
+    const sender = getMessageSender(gId);
+    const preview = getMessagePreview(gId);
     document.getElementById('replyBarSender').textContent = sender;
     document.getElementById('replyBarText').textContent = preview;
     bar.classList.add('show');
@@ -1784,31 +1748,31 @@ function setReplyTo(msgId) {
 }
 
 function cancelReply() {
-    replyToMessageId = null;
+    replyToGlobalId = null;
     document.getElementById('chatReplyBar').classList.remove('show');
 }
 
-// Скролл к сообщению при клике на reply
-function scrollToMessage(msgId) {
-    const el = document.getElementById('msg-' + msgId);
+function scrollToMessage(gId) {
+    const localMsgId = globalToLocalMap.get(gId);
+    const el = localMsgId ? document.getElementById('msg-' + localMsgId) : null;
     if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         el.style.outline = '2px solid var(--primary-color)';
         setTimeout(() => { el.style.outline = ''; }, 1500);
     } else {
-        // Сообщение не найдено локально — просто показываем toast
         showStatus('info', 'Сообщение отсутствует в локальном чате');
     }
 }
 
 function addMessageBubble(opts) {
-    // opts: { side:'mine'|'friend', text, cipherText, fileInfo, mediaData, sigResult, timeCheck, replyTo, isSigned, replyFromEnvelope }
     clearEmptyState();
-    const msgId = ++chatMessageCounter;
+    const msgId = ++chatMessageCounter; // local DOM ID
     const container = document.getElementById('chatMessages');
 
-    // === ИЗМЕНЕНИЕ 1: регистрируем в кэше ===
-    registerMessageInCache(msgId, opts.side, opts.text, opts.fileInfo?.name);
+    if (opts.globalId) {
+        globalToLocalMap.set(opts.globalId, msgId);
+        registerMessageInCache(opts.globalId, opts.side, opts.text, opts.fileInfo?.name);
+    }
 
     const bubble = document.createElement('div');
     bubble.className = 'msg-bubble msg-' + opts.side;
@@ -1817,36 +1781,25 @@ function addMessageBubble(opts) {
 
     let html = '';
 
-    // Sender label
     html += `<div class="msg-sender">${opts.side==='mine' ? 'Вы' : 'Собеседник'}</div>`;
 
-    // === ИЗМЕНЕНИЕ 1: улучшенный reply preview ===
-    if (opts.replyTo || opts.replyFromEnvelope) {
-        let replyId, replySender, replyPreview;
-        if (opts.replyFromEnvelope) {
-            // При расшифровке: используем данные из конверта
-            replyId = opts.replyFromEnvelope.id;
-            replySender = opts.replyFromEnvelope.sender || 'Собеседник';
-            replyPreview = opts.replyFromEnvelope.preview || '…';
-            // Сохраняем в кэш для будущих ссылок
-            if (!replyInfoCache.has(replyId)) {
-                replyInfoCache.set(replyId, { sender: replySender, preview: replyPreview, exists: false });
-            }
-        } else {
-            replyId = opts.replyTo;
-            replySender = getMessageSender(replyId);
-            replyPreview = getMessagePreview(replyId);
+    if (opts.replyTo) {
+        const replyGId = opts.replyTo;
+        const replySender = opts.replySender || getMessageSender(replyGId) || 'Собеседник';
+        const replyPreview = opts.replyPreview || getMessagePreview(replyGId) || '…';
+        
+        if (!replyInfoCache.has(replyGId)) {
+            replyInfoCache.set(replyGId, { sender: replySender, preview: replyPreview, exists: false });
         }
         
-        if (replyId) {
-            const elExists = document.getElementById('msg-' + replyId) !== null;
-            html += `<div class="msg-reply-preview" onclick="scrollToMessage(${replyId})" style="${elExists ? '' : 'opacity: 0.6;'}">
-                <strong>${escapeHtml(replySender)}:</strong> ${escapeHtml(replyPreview)}
-            </div>`;
-        }
+        const localReplyId = globalToLocalMap.get(replyGId);
+        const elExists = localReplyId && document.getElementById('msg-' + localReplyId) !== null;
+        
+        html += `<div class="msg-reply-preview" onclick="scrollToMessage('${replyGId}')" style="${elExists ? '' : 'opacity: 0.6;'}">
+            <strong>${escapeHtml(replySender)}:</strong> ${escapeHtml(replyPreview)}
+        </div>`;
     }
 
-    // File info
     if (opts.fileInfo) {
         const icon = getFileIconEmoji(opts.fileInfo.type);
         html += `<div class="msg-file-info">
@@ -1858,13 +1811,10 @@ function addMessageBubble(opts) {
         </div>`;
     }
 
-    // Media preview
     if (opts.mediaData) {
         const mediaType = getVerifiedMediaType(opts.mediaData);
-        let category = mediaType ? SAFE_MEDIA_TYPES[mediaType] : null; // ВАЖНО: заменили const на let
+        let category = mediaType ? SAFE_MEDIA_TYPES[mediaType] : null; 
         if (category && !containsScriptContent(opts.mediaData)) {
-            // --- ДОБАВЛЕННЫЙ ФИКС ДЛЯ ГОЛОСОВЫХ ---
-            // Если парсер принял WebM-аудио за видео, принудительно переключаем категорию
             if (category === 'video' && opts.fileInfo && opts.fileInfo.name.includes('Voice_')) {
                 category = 'audio';
             }
@@ -1877,7 +1827,6 @@ function addMessageBubble(opts) {
             } else if (category === 'video') {
                 html += `<video src="${url}" controls controlsList="nodownload" style="max-width:100%"></video>`;
             } else if (category === 'audio') {
-                // ДОБАВЛЕНО: Обертка с выбором скорости воспроизведения
                 html += `<div style="display:flex; align-items:center; gap:8px;">
                     <audio src="${url}" controls controlsList="nodownload" style="flex:1; min-width:150px;"></audio>
                     <select class="audio-speed-select" onchange="this.previousElementSibling.playbackRate = parseFloat(this.value)" title="Скорость">
@@ -1892,12 +1841,10 @@ function addMessageBubble(opts) {
         }
     }
 
-    // Text
     if (opts.text) {
         html += `<div class="msg-text">${escapeHtml(opts.text)}</div>`;
     }
 
-    // Signature status
     if (opts.sigResult) {
         const cls = opts.sigResult.verified ? 'msg-sig-ok' : (opts.sigResult.reason==='no_key' ? 'msg-sig-warn' : 'msg-sig-fail');
         html += `<div class="msg-signature ${cls}">${escapeHtml(opts.sigResult.message)}</div>`;
@@ -1905,60 +1852,50 @@ function addMessageBubble(opts) {
         html += `<div class="msg-signature msg-sig-warn">ℹ️ Без подписи</div>`;
     }
 
-    // Time check
     if (opts.timeCheck && opts.timeCheck.warning) {
         html += `<div class="msg-signature msg-sig-warn">${escapeHtml(opts.timeCheck.message)}</div>`;
     }
 
-    // Meta (time)
     html += `<div class="msg-meta"><span>${formatTime(new Date())}</span></div>`;
 
-    // Action buttons
     html += '<div class="msg-actions">';
     if (opts.cipherText) {
-        // Показываем кнопки "Шифротекст" и "Копировать" ТОЛЬКО если это не файл
         if (!opts.fileInfo) {
             html += `<button class="msg-action-btn" onclick="toggleCipher(${msgId})">🔤 Шифротекст</button>`;
             html += `<button class="msg-action-btn" onclick="copyCipher(${msgId})">📋 Копировать</button>`;
         }
-        // Кнопка скачивания .aes файла для своих зашифрованных файлов
         if (opts.side === 'mine' && opts.fileInfo) {
             html += `<button class="msg-action-btn" onclick="downloadEncryptedFile(${msgId})">💾 Скачать</button>`;
         }
     }
-    html += `<button class="msg-action-btn" onclick="setReplyTo(${msgId})">↩️ Ответить</button>`;
+    // Кнопка Reply использует глобальный ID
+    html += `<button class="msg-action-btn" onclick="setReplyTo('${opts.globalId || msgId}')">↩️ Ответить</button>`;
 
-    // File actions (download)
     if (opts.fileInfo && opts.fileInfo.downloadData) {
         html += `<button class="msg-action-btn" onclick="downloadFileFromMsg(${msgId})" data-download='pending'>💾 Скачать</button>`;
     }
     html += '</div>';
 
-    // Cipher text container 
-    // Не рендерим огромную base64-строку в DOM для файлов, бережем память
     if (opts.cipherText && !opts.fileInfo) {
         html += `<div class="msg-cipher" id="cipher-${msgId}">${escapeHtml(opts.cipherText)}</div>`;
     }
 
     bubble.innerHTML = html;
 
-    // Store data on element
     if (opts.fileInfo && opts.fileInfo.downloadData) {
         bubble._downloadData = opts.fileInfo.downloadData;
         bubble._downloadName = opts.fileInfo.name;
         bubble._downloadType = opts.fileInfo.type;
     }
-    // === ИЗМЕНЕНИЕ 2: сохраняем шифротекст для скачивания .enc ===
     if (opts.cipherText) {
         bubble._cipherText = opts.cipherText;
-        // Всегда используем фиксированное имя, чтобы не раскрывать оригинальное
         bubble._encryptedFileName = 'encrypted.enc';
     }
 
-        container.appendChild(bubble);
-        scrollChatBottom();
-        return msgId;
-    }
+    container.appendChild(bubble);
+    scrollChatBottom();
+    return msgId;
+}
 
 function escapeHtml(str) {
     const d = document.createElement('div');
@@ -1981,7 +1918,6 @@ async function copyCipher(msgId) {
     }
 }
 
-// === ИЗМЕНЕНИЕ 2: скачивание зашифрованного файла (.enc) ===
 function downloadEncryptedFile(msgId) {
     const el = document.getElementById('msg-' + msgId);
     if (!el || !el._cipherText) return;
@@ -2010,6 +1946,7 @@ function clearChat() {
     const container = document.getElementById('chatMessages');
     chatMessageCounter = 0;
     replyInfoCache.clear();
+    globalToLocalMap.clear();
     cancelReply();
     clearAttachedFile();
     updateChatEmptyState();
@@ -2028,47 +1965,55 @@ async function chatEncrypt() {
     if (!text && !hasFile) { showStatus('error','Введите сообщение или прикрепите файл'); return; }
 
     try {
-        let replyInfo = null;
-        if (replyToMessageId) {
-            const sender = getMessageSender(replyToMessageId);
-            const preview = getMessagePreview(replyToMessageId);
-            replyInfo = { id: replyToMessageId, preview: preview, sender: sender };
+        const msgGlobalId = crypto.randomUUID();
+        const metadata = { gId: msgGlobalId };
+
+        if (replyToGlobalId) {
+            metadata.rId = replyToGlobalId;
+            metadata.rSender = getMessageSender(replyToGlobalId);
+            metadata.rPrev = getMessagePreview(replyToGlobalId);
         }
 
-        // === DOUBLE RATCHET: Получаем ключ и заголовок ===
         const rData = Ratchet.ratchetEncrypt();
+        let ctB64, envelope, plainBytes;
 
         if (hasFile) {
-            // Передаем rData.mk
-            const ctB64 = await encryptPayload(new Uint8Array(chatAttachedFile.data), AAD_FILE, rData.mk);
-            // Передаем rData.header
-            const envelope = buildEnvelope('file', ctB64, replyInfo, chatAttachedFile.file.name, rData.header);
+            metadata.fName = chatAttachedFile.file.name;
+            metadata.fType = chatAttachedFile.file.type;
+            if (text) metadata.txt = text; // Удобство: можно отправить файл с подписью-текстом
+
+            plainBytes = packPayload(metadata, chatAttachedFile.data);
+            ctB64 = await encryptPayload(plainBytes, AAD_FILE, rData.mk);
+            envelope = buildEnvelope('file', ctB64, rData.header);
 
             addMessageBubble({
                 side: 'mine',
+                globalId: msgGlobalId,
                 text: text || null,
                 cipherText: envelope,
                 fileInfo: { 
-                    name: chatAttachedFile.file.name + ' → encrypted.enc',
+                    name: chatAttachedFile.file.name + ' → encrypted.enc', // Локально показываем статус
                     size: chatAttachedFile.file.size, 
                     type: chatAttachedFile.file.type 
                 },
                 mediaData: chatAttachedFile.data,
-                replyTo: replyToMessageId,
+                replyTo: replyToGlobalId,
                 isSigned: ed25519SigningEnabled
             });
             clearAttachedFile();
         } else {
-            // Передаем rData.mk
-            const ctB64 = await encryptPayload(te.encode(text), AAD_MESSAGE, rData.mk);
-            // Передаем rData.header
-            const envelope = buildEnvelope('msg', ctB64, replyInfo, null, rData.header);
+            metadata.txt = text;
+            plainBytes = packPayload(metadata);
+            
+            ctB64 = await encryptPayload(plainBytes, AAD_MESSAGE, rData.mk);
+            envelope = buildEnvelope('msg', ctB64, rData.header);
 
             addMessageBubble({
                 side: 'mine',
+                globalId: msgGlobalId,
                 text: text,
                 cipherText: envelope,
-                replyTo: replyToMessageId,
+                replyTo: replyToGlobalId,
                 isSigned: ed25519SigningEnabled
             });
         }
@@ -2104,49 +2049,74 @@ async function chatDecrypt() {
 
     try {
         const env = parseEnvelope(rawText);
-        const originalFileName = env.fileName || 'decrypted_file';
         const aadPrefix = (env.type === 'file') ? AAD_FILE : AAD_MESSAGE;
 
         if (!env.rh) throw new Error("Сообщение не содержит заголовка Double Ratchet.");
 
-        // 1. Получаем транзакционный слепок и ключ от ратчета
         const ratchetResult = Ratchet.ratchetDecryptTentative(env.rh);
-
-        // 2. Пытаемся расшифровать. Если MAC или ключ неверны, выбросится ошибка!
         const result = await decryptPayload(env.ct, aadPrefix, ratchetResult.mk);
-
-        // 3. Расшифровка успешна -> фиксируем состояние ратчета
         Ratchet.commitState(ratchetResult.tentativeState, ratchetResult.skipKeyToRemove);
 
-        const replyFromEnvelope = env.reply || null;
+        let metadata, binaryData;
+        
+        // Версия 4 - метаданные зашифрованы внутри payload
+        if (env.v >= 4) {
+            const unpacked = unpackPayload(result.data);
+            metadata = unpacked.metadata;
+            binaryData = unpacked.binaryData;
+        } else {
+            // Обратная совместимость (Backwards Compatibility) со старыми сообщениями (v1-v3)
+            if (env.type === 'file') {
+                binaryData = result.data;
+                metadata = {
+                    gId: crypto.randomUUID(), // fake id 
+                    fName: env.fileName || 'decrypted_file',
+                    fType: 'application/octet-stream'
+                };
+            } else {
+                metadata = {
+                    gId: crypto.randomUUID(),
+                    txt: td.decode(result.data)
+                };
+            }
+            if (env.reply) {
+                metadata.rId = env.reply.id; 
+                metadata.rSender = env.reply.sender;
+                metadata.rPrev = env.reply.preview;
+            }
+        }
 
         if (env.type === 'file') {
-            const fileType = 'application/octet-stream';
             addMessageBubble({
                 side: 'friend',
-                text: null,
+                globalId: metadata.gId,
+                text: metadata.txt || null, // Поддержка текста привязанного к файлу
                 cipherText: rawText,
                 fileInfo: {
-                    name: originalFileName,
-                    size: result.data.byteLength,
-                    type: fileType,
-                    downloadData: result.data
+                    name: metadata.fName,
+                    size: binaryData.byteLength,
+                    type: metadata.fType || 'application/octet-stream',
+                    downloadData: binaryData
                 },
-                mediaData: result.data,
+                mediaData: binaryData,
                 sigResult: result.hasSig ? result.sigResult : null,
                 timeCheck: result.timeCheck,
-                replyFromEnvelope: replyFromEnvelope,
+                replyTo: metadata.rId,
+                replyPreview: metadata.rPrev,
+                replySender: metadata.rSender,
                 isSigned: result.hasSig
             });
         } else {
-            const plainText = td.decode(result.data);
             addMessageBubble({
                 side: 'friend',
-                text: plainText,
+                globalId: metadata.gId,
+                text: metadata.txt,
                 cipherText: rawText,
                 sigResult: result.hasSig ? result.sigResult : null,
                 timeCheck: result.timeCheck,
-                replyFromEnvelope: replyFromEnvelope,
+                replyTo: metadata.rId,
+                replyPreview: metadata.rPrev,
+                replySender: metadata.rSender,
                 isSigned: result.hasSig
             });
         }
@@ -2155,8 +2125,6 @@ async function chatDecrypt() {
         autoResizeInput();
         cancelReply();
     } catch(e) {
-        // Если произошла ошибка (сбой MAC, старое сообщение, мусор),
-        // Ratchet.state остается нетронутым, сессия не ломается!
         showStatus('error','Ошибка расшифровки: ' + e.message);
     }
 }
@@ -2226,7 +2194,7 @@ function destroyAllData() {
     ed25519SigningEnabled = false;
     ed25519VerifyEnabled = false;
     chatAttachedFile = null;
-    replyToMessageId = null;
+    replyToGlobalId = null;
     isInitiatorRole = null;
     Ratchet.state = {
         RK: null,
@@ -2240,6 +2208,7 @@ function destroyAllData() {
         skipped: {}
     };
     replyInfoCache.clear();
+    globalToLocalMap.clear();
 
     mediaObjectUrls.forEach(u => URL.revokeObjectURL(u));
     mediaObjectUrls = [];
@@ -2294,20 +2263,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('importEd25519PrivateKey').addEventListener('click', importEd25519PrivateKey);
     document.getElementById('importFriendEd25519Key').addEventListener('click', importFriendEd25519Key);
 
-    // Файл-input в чате
     document.getElementById('chatFileInput').addEventListener('change', (e) => {
         if (e.target.files[0]) attachFile(e.target.files[0]);
     });
 
-    // Auto-resize
     const chatInput = document.getElementById('chatInput');
     chatInput.addEventListener('input', autoResizeInput);
 
-    // Enter для шифрования (Shift+Enter = новая строка)
     chatInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) {
             e.preventDefault();
-            // Определяем: если текст похож на шифротекст — расшифровываем, иначе шифруем
             const val = chatInput.value.trim();
             if (val && looksLikeCiphertext(val)) {
                 chatDecrypt();
@@ -2317,7 +2282,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Ctrl+V — вставка файлов в чат
     chatInput.addEventListener('paste', async (e) => {
         const items = e.clipboardData?.items;
         if (!items) return;
@@ -2331,7 +2295,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Drag & Drop на область сообщений
     const chatMessages = document.getElementById('chatMessages');
     chatMessages.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
     chatMessages.addEventListener('drop', (e) => {
@@ -2339,7 +2302,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (e.dataTransfer.files.length) attachFile(e.dataTransfer.files[0]);
     });
 
-    // Drag & Drop на поле ввода
     chatInput.addEventListener('dragover', (e) => { e.preventDefault(); });
     chatInput.addEventListener('drop', (e) => {
         e.preventDefault();
@@ -2349,16 +2311,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateChatHeader();
 });
 
-// Эвристика: выглядит ли текст как шифротекст
 function looksLikeCiphertext(text) {
-    // Envelope v2 — всегда валидный base64 длиной > 40
     if (text.length < 40) return false;
-    // Проверяем: выглядит ли как base64
     if (/^[A-Za-z0-9+/=\s]+$/.test(text) && text.length > 60) return true;
     return false;
 }
 
-// Очистка при закрытии
 window.addEventListener('beforeunload', () => {
     mediaObjectUrls.forEach(u => URL.revokeObjectURL(u));
 });
