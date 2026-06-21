@@ -942,8 +942,8 @@ let ed25519VerifyEnabled = false;
 // Чат
 let chatMessageCounter = 0;
 let chatAttachedFile = null;      
-let replyToGlobalId = null;       // [ИСПРАВЛЕНО] Глобальный ID (UUID) вместо локального ID
-const globalToLocalMap = new Map(); // [НОВОЕ] Связка: globalId -> localMsgId (для авто-скролла)
+let replyToGlobalId = null;       // Глобальный ID (UUID) вместо локального ID
+const globalToLocalMap = new Map(); // Связка: globalId -> localMsgId (для авто-скролла)
 let mediaObjectUrls = [];         
 
 const replyInfoCache = new Map(); // gId -> { sender, preview, exists }
@@ -1165,7 +1165,7 @@ function getVerifiedMediaType(buf) {
     if (a.length>=12&&a[0]===0x52&&a[1]===0x49&&a[2]===0x46&&a[3]===0x46&&a[8]===0x57&&a[9]===0x45&&a[10]===0x42&&a[11]===0x50) return 'image/webp';
     if (a[0]===0x42&&a[1]===0x4D) return 'image/bmp';
     if (a.length>=8&&a[4]===0x66&&a[5]===0x74&&a[6]===0x79&&a[7]===0x70) return 'video/mp4';
-    if (a[0]===0x1A&&a[1]===0x45&&a[2]===0xDF&&a[3]===0xA3) return 'video/webm';
+    if (a[0]===0x1A && a[1]===0x45 && a[2]===0xDF && a[3]===0xA3) return 'video/webm';
     if (a[0]===0x4F&&a[1]===0x67&&a[2]===0x67&&a[3]===0x53) return 'audio/ogg';
     if (a.length>=12&&a[0]===0x52&&a[1]===0x49&&a[2]===0x46&&a[3]===0x46&&a[8]===0x57&&a[9]===0x41&&a[10]===0x56&&a[11]===0x45) return 'audio/wav';
     if ((a[0]===0xFF&&(a[1]===0xFB||a[1]===0xF3||a[1]===0xF2))||(a[0]===0x49&&a[1]===0x44&&a[2]===0x33)) return 'audio/mpeg';
@@ -1486,7 +1486,10 @@ function buildEnvelope(type, ciphertextBase64, ratchetHeader = null) {
 
 function parseEnvelope(text) {
     try {
-        const json = JSON.parse(decodeURIComponent(escape(atob(text))));
+        // [ИСПРАВЛЕНО] Полностью удаляем все пробелы, переносы строк и табуляцию из Base64-строки
+        const cleanedText = text.replace(/\s+/g, '');
+        const decoded = atob(cleanedText);
+        const json = JSON.parse(decodeURIComponent(escape(decoded)));
         if ((json.v >= 2 && json.v <= 4) && json.ct) return {
             v: json.v, 
             type: json.type, 
@@ -1495,7 +1498,9 @@ function parseEnvelope(text) {
             fileName: json.fileName, // Для старых версий < 4
             rh: json.rh
         };
-    } catch(e) {}
+    } catch(e) {
+        console.error("Ошибка парсинга конверта:", e);
+    }
     return { v: 1, type: 'msg', ct: text, reply: null, fileName: null, rh: null };
 }
 
@@ -1518,8 +1523,14 @@ function packPayload(metadata, binaryData = null) {
 
 // Распаковка внутреннего буфера в метаданные и файл
 function unpackPayload(bytes) {
+    if (!bytes || bytes.byteLength < 4) {
+        throw new Error("Неверная длина бинарного пакета (менее 4 байт)");
+    }
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const metaLen = view.getUint32(0, true);
+    if (bytes.byteLength < 4 + metaLen) {
+        throw new Error("Заявленная длина метаданных превышает размер пакета");
+    }
     const metaBytes = bytes.subarray(4, 4 + metaLen);
     const metadata = JSON.parse(td.decode(metaBytes));
     const binaryData = bytes.byteLength > 4 + metaLen ? bytes.subarray(4 + metaLen) : null;
@@ -1980,7 +1991,7 @@ async function chatEncrypt() {
         if (hasFile) {
             metadata.fName = chatAttachedFile.file.name;
             metadata.fType = chatAttachedFile.file.type;
-            if (text) metadata.txt = text; // Удобство: можно отправить файл с подписью-текстом
+            if (text) metadata.txt = text; 
 
             plainBytes = packPayload(metadata, chatAttachedFile.data);
             ctB64 = await encryptPayload(plainBytes, AAD_FILE, rData.mk);
@@ -1992,7 +2003,7 @@ async function chatEncrypt() {
                 text: text || null,
                 cipherText: envelope,
                 fileInfo: { 
-                    name: chatAttachedFile.file.name + ' → encrypted.enc', // Локально показываем статус
+                    name: chatAttachedFile.file.name + ' → encrypted.enc', 
                     size: chatAttachedFile.file.size, 
                     type: chatAttachedFile.file.type 
                 },
@@ -2059,17 +2070,15 @@ async function chatDecrypt() {
 
         let metadata, binaryData;
         
-        // Версия 4 - метаданные зашифрованы внутри payload
         if (env.v >= 4) {
             const unpacked = unpackPayload(result.data);
             metadata = unpacked.metadata;
             binaryData = unpacked.binaryData;
         } else {
-            // Обратная совместимость (Backwards Compatibility) со старыми сообщениями (v1-v3)
             if (env.type === 'file') {
                 binaryData = result.data;
                 metadata = {
-                    gId: crypto.randomUUID(), // fake id 
+                    gId: crypto.randomUUID(), 
                     fName: env.fileName || 'decrypted_file',
                     fType: 'application/octet-stream'
                 };
@@ -2087,15 +2096,16 @@ async function chatDecrypt() {
         }
 
         if (env.type === 'file') {
+            const fileType = 'application/octet-stream';
             addMessageBubble({
                 side: 'friend',
                 globalId: metadata.gId,
-                text: metadata.txt || null, // Поддержка текста привязанного к файлу
+                text: metadata.txt || null, 
                 cipherText: rawText,
                 fileInfo: {
                     name: metadata.fName,
                     size: binaryData.byteLength,
-                    type: metadata.fType || 'application/octet-stream',
+                    type: fileType,
                     downloadData: binaryData
                 },
                 mediaData: binaryData,
@@ -2311,10 +2321,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateChatHeader();
 });
 
+// [ИСПРАВЛЕНО] Эвристика: выглядит ли текст как шифротекст
 function looksLikeCiphertext(text) {
-    if (text.length < 40) return false;
-    if (/^[A-Za-z0-9+/=\s]+$/.test(text) && text.length > 60) return true;
-    return false;
+    // Удаляем любые пробельные символы перед валидацией, чтобы избежать ложных срабатываний
+    const cleaned = text.replace(/\s+/g, '');
+    if (cleaned.length < 40) return false;
+    // Проверяем, что строка представляет собой чистый Base64
+    return /^[A-Za-z0-9+/]+={0,2}$/.test(cleaned);
 }
 
 window.addEventListener('beforeunload', () => {
