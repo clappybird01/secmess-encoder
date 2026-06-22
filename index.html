@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' blob:; media-src blob:; object-src 'none'; frame-src 'none'; connect-src 'none'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval';">
-    <title>Secure Messenger</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' blob:; media-src blob:; object-src 'none'; frame-src 'none'; connect-src 'self' https://esm.sh; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval' https://esm.sh;">
+    <title>Secure Messenger (Hybrid PQC)</title>
     <style>
         :root {
             --bg-color: #f5f0eb;
@@ -288,6 +288,21 @@
         }
         .verification-section { background: var(--verification-bg); padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid var(--border-color); }
         .comparison-section { background: var(--comparison-bg); padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid var(--border-color); }
+        
+        /* Стили гибридного слоя */
+        .hybrid-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
         .key-info { background: var(--secondary-bg); padding: 10px; border-radius: 8px; margin: 5px 0; font-family: monospace; font-size: 12px; }
         .security-notice { background: var(--verification-bg); border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; margin: 10px 0; font-size: 14px; }
 
@@ -358,19 +373,14 @@
             border-bottom-left-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
         }
 
-        .msg-sender {
-            font-size: 11px; font-weight: 700; margin-bottom: 2px; opacity: 0.7;
-        }
+        .msg-sender { font-size: 11px; font-weight: 700; margin-bottom: 2px; opacity: 0.7; }
         .msg-text { font-size: 15px; white-space: pre-wrap; }
         .msg-meta {
             display: flex; align-items: center; justify-content: flex-end;
             gap: 6px; margin-top: 4px; font-size: 11px; opacity: 0.6;
         }
 
-        /* Кнопки действий у сообщения */
-        .msg-actions {
-            display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap;
-        }
+        .msg-actions { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
         .msg-action-btn {
             padding: 3px 8px; font-size: 11px; border-radius: 6px;
             background: rgba(128,128,128,0.15); border: none; color: inherit;
@@ -379,7 +389,6 @@
         }
         .msg-action-btn:hover { background: rgba(128,128,128,0.3); transform: none; box-shadow: none; }
 
-        /* Шифротекст под сообщением */
         .msg-cipher {
             display: none; margin-top: 6px; padding: 6px 8px;
             background: rgba(0,0,0,0.06); border-radius: 6px;
@@ -391,7 +400,6 @@
         }
         .msg-cipher.show { display: block; }
 
-        /* Ответ (reply) */
         .msg-reply-preview {
             padding: 4px 8px; margin-bottom: 4px; border-left: 3px solid var(--reply-border);
             background: var(--reply-bg); border-radius: 0 6px 6px 0;
@@ -400,7 +408,6 @@
         }
         .msg-reply-preview:hover { opacity: 1; }
 
-        /* Файл-сообщение */
         .msg-file-info {
             display: flex; align-items: center; gap: 8px; padding: 8px;
             background: var(--msg-file-bg); border-radius: 8px; margin: 4px 0;
@@ -410,12 +417,10 @@
         .msg-file-name { font-weight: 600; font-size: 13px; word-break: break-all; }
         .msg-file-size { font-size: 11px; opacity: 0.7; }
 
-        /* Медиа превью в баббле */
         .msg-media { margin: 6px 0; border-radius: 8px; overflow: hidden; }
         .msg-media img { max-width: 100%; max-height: 300px; display: block; border-radius: 8px; cursor: pointer; }
         .msg-media video, .msg-media audio { max-width: 100%; border-radius: 8px; }
 
-        /* Статусы подписи внутри баббла */
         .msg-signature {
             font-size: 11px; margin-top: 4px; padding: 2px 6px;
             border-radius: 4px; display: inline-block;
@@ -427,7 +432,6 @@
         [data-theme="dark"] .msg-sig-fail, [data-theme="midnight"] .msg-sig-fail { color: #f85149; }
         [data-theme="dark"] .msg-sig-warn, [data-theme="midnight"] .msg-sig-warn { color: #ffc107; }
 
-        /* Полоска reply над полем ввода */
         .chat-reply-bar {
             display: none; padding: 8px 12px; background: var(--secondary-bg);
             border-top: 1px solid var(--border-color);
@@ -439,9 +443,7 @@
             padding-left: 8px; min-width: 0;
         }
         .chat-reply-bar-sender { font-weight: 700; font-size: 11px; }
-        .chat-reply-bar-text {
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
+        .chat-reply-bar-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .chat-reply-bar-close {
             width: 28px; height: 28px; border-radius: 50%; font-size: 16px;
             display: flex; align-items: center; justify-content: center;
@@ -450,7 +452,6 @@
         }
         .chat-reply-bar-close:hover { background: rgba(128,128,128,0.2); transform: none; box-shadow: none; }
 
-        /* Поле ввода сообщения */
         .chat-input-area {
             display: flex; align-items: flex-end; gap: 8px;
             padding: 10px 12px; background: var(--card-bg);
@@ -466,9 +467,7 @@
         }
         .chat-attach-btn:hover { opacity: 1; background: var(--secondary-bg); transform: none; box-shadow: none; }
 
-        .chat-input-wrapper {
-            flex: 1; position: relative; min-width: 0;
-        }
+        .chat-input-wrapper { flex: 1; position: relative; min-width: 0; }
         .chat-input {
             width: 100%; min-height: 40px; max-height: 120px; padding: 10px 14px;
             border: 1px solid var(--border-color); border-radius: 20px;
@@ -480,7 +479,6 @@
         .chat-input:focus { outline: none; border-color: var(--primary-color); }
         .chat-input::placeholder { color: var(--text-color); opacity: 0.4; }
 
-        /* Файл-превью в поле ввода */
         .chat-file-preview {
             display: none; padding: 6px 10px; background: var(--secondary-bg);
             border-radius: 8px; margin-bottom: 6px;
@@ -493,9 +491,7 @@
         }
         .chat-file-preview-close:hover { opacity: 1; transform: none; box-shadow: none; }
 
-        .chat-send-btns {
-            display: flex; flex-direction: column; gap: 4px; flex-shrink: 0;
-        }
+        .chat-send-btns { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
         .chat-send-btn {
             width: 40px; height: 40px; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
@@ -506,10 +502,6 @@
         .chat-encrypt-btn { background: var(--primary-color); color: white; }
         .chat-decrypt-btn { background: #28a745; color: white; }
 
-        .chat-send-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
-        .chat-send-btn[disabled]:hover { transform: none; }
-
-        /* Пустой чат */
         .chat-empty {
             flex: 1; display: flex; flex-direction: column;
             align-items: center; justify-content: center; opacity: 0.5;
@@ -518,7 +510,6 @@
         .chat-empty-icon { font-size: 48px; margin-bottom: 12px; }
         .chat-empty-text { font-size: 14px; line-height: 1.5; }
 
-        /* ===== Адаптив ===== */
         @media (max-width: 768px) {
             body { margin: 10px auto; padding: 0 15px; }
             .theme-panel { position: relative; top: auto; right: auto; margin-bottom: 15px; max-width: none; }
@@ -548,10 +539,6 @@
         ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--primary-color); }
 
-        /* Tooltip для кнопок */
-        .chat-send-btn[title]::after { content: none; }
-        
-        /* Анимация записи голосового */
         .recording-active { 
             color: var(--danger-color) !important; 
             animation: pulseRecord 1.5s infinite; 
@@ -562,13 +549,26 @@
             100% { transform: scale(1); } 
         }
         
-        /* Выбор скорости аудио */
         .audio-speed-select {
             background: var(--card-bg); color: var(--text-color);
             border: 1px solid var(--border-color); border-radius: 6px;
             padding: 4px 8px; font-size: 13px; cursor: pointer; outline: none;
             flex-shrink: 0;
         }
+
+        .hybrid-ciphertext-container {
+            margin-top: 15px; padding: 15px; border: 2px solid var(--primary-color); border-radius: 8px; background: var(--secondary-bg);
+            position: relative; overflow: hidden;
+        }
+        .hybrid-ciphertext-container::before {
+            content: '⚛️ PQC СЛОЙ';
+            position: absolute;
+            top: 0; right: 0;
+            background: var(--primary-color); color: white;
+            padding: 4px 12px; font-size: 10px; font-weight: bold;
+            border-radius: 0 8px 0 8px; letter-spacing: 1px;
+        }
+
     </style>
     <script src="sodium.js"></script>
 </head>
@@ -602,130 +602,137 @@
         </div>
     </div>
 
-    <h1>🔐 Secure Messenger</h1>
+    <h1>🔐 Secure Messenger <span class="hybrid-badge">Hybrid X25519+PQC</span></h1>
 
     <div class="tabs">
-        <div class="tab active" data-tab="ecdh-exchange">🔐 Обмен ключами</div>
+        <div class="tab active" data-tab="hybrid-exchange">🔐 Обмен ключами</div>
         <div class="tab" data-tab="signatures">✍️ Подписи</div>
         <div class="tab" data-tab="chat">💬 Чат</div>
     </div>
 
-    <!-- ==================== Вкладка обмена ключами ==================== -->
-    <div id="ecdh-exchange" class="tab-content active">
+    <!-- ==================== Вкладка обмена гибридными ключами ==================== -->
+    <div id="hybrid-exchange" class="tab-content active">
         <div class="card">
-            <h3>🔐 Шаг 1. Создайте ключи</h3>
+            <h3>🔐 Шаг 1. Создайте ваш гибридный ключ</h3>
             <div class="security-notice">
-                <strong>🎯 Ваш ключ шифрования никогда не передаётся!</strong> 
-                Он вычисляется автоматически на основе вашего и чужого публичного ключа.
+                <strong>🎯 Под капотом упаковано два ключа: классический X25519 и квантово-устойчивый ML-KEM-768.</strong> 
+                Просто скопируйте одну строчку ниже и передайте ее собеседнику.
             </div>
-            <button id="generateEcdhKeys">🔑 Создать мои ключи</button>
+            <button id="generateHybridKeysBtn">🔑 Создать мои ключи</button>
 
             <div class="verification-section">
-                <h4>🔍 Отпечаток моего ключа:</h4>
+                <h4>🔍 Отпечаток ключа:</h4>
                 <div class="input-wrapper">
-                    <div class="fingerprint" id="myEcdhFingerprint">—</div>
+                    <div class="fingerprint" id="myHybridFingerprint">—</div>
                     <div class="input-actions" style="top: 4px;">
-                        <button class="action-btn" onclick="copyField('myEcdhFingerprint')" title="Копировать">📋</button>
+                        <button class="action-btn" onclick="copyField('myHybridFingerprint')" title="Копировать">📋</button>
                     </div>
                 </div>
 
-                <label>Мой публичный ключ (отправьте его собеседнику):</label>
+                <label>Мой гибридный публичный ключ (отправьте его собеседнику):</label>
                 <div class="input-wrapper">
-                    <textarea id="ecdhPublicKey" readonly></textarea>
+                    <textarea id="myHybridPublicKey" readonly></textarea>
                     <div class="input-actions">
-                        <button class="action-btn" onclick="copyField('ecdhPublicKey')" title="Копировать">📋</button>
+                        <button class="action-btn" onclick="copyField('myHybridPublicKey')" title="Копировать">📋</button>
                     </div>
                 </div>
             </div>
         </div>
 
         <div class="card">
-            <h3>🤝 Шаг 2. Вставьте ключ собеседника</h3>
-            <label>Публичный ключ собеседника:</label>
+            <h3>🤝 Шаг 2. Ключ собеседника и соединение</h3>
+            <label>Гибридный ключ собеседника:</label>
             <div class="input-wrapper">
-                <textarea id="friendsEcdhPublicKey" placeholder="Вставьте ключ, который прислал собеседник..." oninput="updateFriendEcdhFingerprint()"></textarea>
+                <textarea id="friendHybridPublicKey" placeholder="Вставьте единую строку гибридного ключа собеседника..." oninput="updateFriendHybridFingerprint()"></textarea>
                 <div class="input-actions">
-                    <button class="action-btn" onclick="pasteToField('friendsEcdhPublicKey')" title="Вставить">📥</button>
-                    <button class="action-btn" onclick="clearField('friendsEcdhPublicKey')" title="Очистить">🗑️</button>
+                    <button class="action-btn" onclick="pasteToField('friendHybridPublicKey')" title="Вставить">📥</button>
+                    <button class="action-btn" onclick="clearField('friendHybridPublicKey')" title="Очистить">🗑️</button>
                 </div>
             </div>
 
-            <div class="comparison-section" id="friendEcdhVerification" style="display: none;">
-                <h4>🔍 Проверка подлинности ключа</h4>
-                <p style="font-size:13px; opacity:0.8; margin: 4px 0 8px;">
-                    Попросите собеседника прислать вам отпечаток по другому каналу (звонок, другой мессенджер) и сравните:
-                </p>
-                <div><strong>Отпечаток ключа собеседника (вычислен):</strong></div>
-                <div class="fingerprint" id="friendEcdhFingerprint">—</div>
-
+            <div class="comparison-section" id="friendHybridVerification" style="display: none;">
+                <h4>🔍 Проверка подлинности (Защита от MITM)</h4>
+                <div><strong>Отпечаток собеседника (вычислен):</strong></div>
+                <div class="fingerprint" id="friendHybridFingerprint">—</div>
                 <label>Отпечаток, который прислал собеседник:</label>
                 <div class="input-wrapper">
-                    <input type="text" id="friendProvidedEcdhFingerprint" placeholder="Вставьте отпечаток для сверки..." />
+                    <input type="text" id="friendProvidedHybridFingerprint" placeholder="Вставьте отпечаток для сверки..." />
                     <div class="input-actions">
-                        <button class="action-btn" onclick="pasteToField('friendProvidedEcdhFingerprint')" title="Вставить">📥</button>
-                        <button class="action-btn" onclick="clearField('friendProvidedEcdhFingerprint')" title="Очистить">🗑️</button>
+                        <button class="action-btn" onclick="pasteToField('friendProvidedHybridFingerprint')" title="Вставить">📥</button>
                     </div>
                 </div>
-                <button id="verifyEcdhFingerprintBtn">✅ Сравнить отпечатки</button>
-
-                <div id="ecdhFingerprintMatch" style="display: none;">
-                    <div style="color: #28a745; font-weight: bold; margin: 10px 0;">
-                        ✅ Отпечатки совпадают! Ключ подлинный
-                    </div>
+                <button id="verifyHybridFingerprintBtn">✅ Сравнить отпечатки</button>
+                <div id="hybridFingerprintMatch" style="display: none;">
+                    <div style="color: #28a745; font-weight: bold; margin: 10px 0;">✅ Отпечатки совпадают!</div>
                 </div>
-                <div id="ecdhFingerprintMismatch" style="display: none;">
-                    <div style="color: #dc3545; font-weight: bold; margin: 10px 0;">
-                        ❌ Отпечатки НЕ совпадают! Ключ мог быть подменён
-                    </div>
+                <div id="hybridFingerprintMismatch" style="display: none;">
+                    <div style="color: #dc3545; font-weight: bold; margin: 10px 0;">❌ Отпечатки НЕ совпадают!</div>
                 </div>
             </div>
 
-            <button id="computeAndUseSharedSecret">🔑 Вычислить и установить общий ключ</button>
+            <button id="establishConnectionBtn">🔑 Установить соединение</button>
+
+            <!-- Блок для обмена Ciphertext, появляется после нажатия "Установить" -->
+            <div id="ciphertextSection" class="hybrid-ciphertext-container" style="display: none;">
+                
+                <!-- Если пользователь определен как инициатор -->
+                <div id="initiatorBlock" style="display: none;">
+                    <h4 style="margin-top: 0;">📤 Отправьте код подтверждения</h4>
+                    <p style="font-size: 13px; opacity: 0.9;">Вы определены как Инициатор соединения. Для завершения ML-KEM обмена передайте этот код собеседнику.</p>
+                    <div class="input-wrapper">
+                        <textarea id="mlKemCiphertextOutput" readonly style="min-height: 80px;"></textarea>
+                        <div class="input-actions">
+                            <button class="action-btn" onclick="copyField('mlKemCiphertextOutput')" title="Копировать">📋</button>
+                        </div>
+                    </div>
+                    <div class="status success" style="margin-top: 10px;">✅ Ваш чат готов к работе. Ждем собеседника.</div>
+                </div>
+
+                <!-- Если пользователь определен как принимающий -->
+                <div id="responderBlock" style="display: none;">
+                    <h4 style="margin-top: 0;">📥 Вставьте код подтверждения</h4>
+                    <p style="font-size: 13px; opacity: 0.9;">Попросите инициатора прислать вам Код подтверждения (Ciphertext) и вставьте его сюда.</p>
+                    <div class="input-wrapper">
+                        <textarea id="mlKemCiphertextInput" placeholder="Вставьте код..." style="min-height: 80px;"></textarea>
+                        <div class="input-actions">
+                            <button class="action-btn" onclick="pasteToField('mlKemCiphertextInput')" title="Вставить">📥</button>
+                            <button class="action-btn" onclick="clearField('mlKemCiphertextInput')" title="Очистить">🗑️</button>
+                        </div>
+                    </div>
+                    <button onclick="completeResponderConnection()" style="margin-top: 10px;">🔐 Завершить настройку</button>
+                </div>
+            </div>
         </div>
 
         <div class="card">
-            <h3>📋 Как это работает</h3>
-            <ol style="line-height: 1.8; padding-left: 20px;">
-                <li><strong>Создайте ключи</strong> — нажмите кнопку выше</li>
-                <li><strong>Отправьте</strong> свой публичный ключ собеседнику</li>
-                <li><strong>Получите</strong> публичный ключ от собеседника и вставьте его</li>
-                <li><strong>Сверьте отпечатки</strong> по звонку или при встрече — это защита от подмены</li>
-                <li><strong>Нажмите «Вычислить общий ключ»</strong> — и переходите в чат!</li>
-            </ol>
-
-            <div class="security-notice" style="margin-top: 10px;">
-                <strong>⚠️ Важно:</strong> Для каждого нового разговора создавайте новые ключи — это обеспечивает максимальную безопасность.
-            </div>
-
-            <details style="margin-top: 12px;">
+            <details>
                 <summary style="cursor: pointer; font-weight: 600; padding: 8px 0; user-select: none;">
-                    🔧 Технические подробности
+                    🔧 Технические подробности (PQC + Patched Ratchet)
                 </summary>
                 <div class="key-info" style="margin-top: 8px;">
                     <strong>Криптографические детали:</strong><br>
-                    • Обмен ключами: X25519 с кривой Curve25519 (libsodium crypto_kx)<br>
-                    • Вывод ключа: BLAKE2b (crypto_generichash) с солью для каждой пары<br>
-                    • Шифрование: XChaCha20-Poly1305 (IETF) с AAD и timestamp<br>
-                    • Подписи: Ed25519 (libsodium-detached, вкладка «Подписи»)<br>
-                    • Защита от replay: проверка времени сообщения (>5 мин = предупреждение)<br>
-                    • Метаданные (Reply/Файлы): Упакованы и зашифрованы внутри payload (Envelope v4)<br>
+                    • Генерация: Один буфер 1216 байт = [32 байта X25519] + [1184 байта ML-KEM-768]<br>
+                    • Обмен ключами (Шаг 1): Асинхронный обмен единой Base64-строкой<br>
+                    • ML-KEM Ciphertext (Шаг 2): Инициатор генерирует и пересылает 1088 байт<br>
+                    • Гибридный миксинг: BLAKE2b — Final = H(S_X25519 || S_MLKEM768), 32 байта<br>
+                    • Шифрование: XChaCha20-Poly1305 с гибридным корневым ключом Double Ratchet<br>
+                    • Envelope v4: Метаданные (Reply, Файлы) полностью скрыты внутри XChaCha20 payload<br>
                     • Изолированные ключи шифрования (защита памяти внутри WebAssembly)<br>
-                    • Отпечатки: SHA-512 → Base64URL (96 бит) + 6 эмодзи (30 бит энтропии)<br>
-                    • Perfect Forward Secrecy: каждая сессия — новые X25519-ключи
+                    • Подписи: Ed25519 (Web Crypto API, неизвлекаемые ключи)<br>
+                    • Отпечатки: SHA-512 → Base64URL (96 бит) + 6 эмодзи (30 бит энтропии)
                 </div>
             </details>
         </div>
     </div>
-
+    
     <!-- ==================== Вкладка подписей Ed25519 ==================== -->
     <div id="signatures" class="tab-content">
-    <div class="card">
-        <h3>✍️ Подписи сообщений</h3>
-        <div class="security-notice">
-            <strong>🛡️ Зачем это нужно?</strong> Подпись доказывает, что сообщение написали именно вы, 
-            а не кто-то другой. Собеседник сможет убедиться в подлинности каждого сообщения.
+        <div class="card">
+            <h3>✍️ Подписи сообщений</h3>
+            <div class="security-notice">
+                <strong>🛡️ Зачем это нужно?</strong> Подпись доказывает, что сообщение написали именно вы.
+            </div>
         </div>
-    </div>
 
         <div class="row">
             <div class="card">
@@ -743,9 +750,7 @@
 
                     <label>Мой приватный ключ (для бэкапа):</label>
                     <div class="input-wrapper">
-                        <button id="exportPrivateKeyBtn">
-                            Экспортировать приватный ключ
-                        </button>
+                        <button id="exportPrivateKeyBtn">Экспортировать приватный ключ</button>
                     </div>
                     <small>⚠️ Ключ копируется в буфер обмена на 30 секунд</small>
                 </div>
@@ -771,7 +776,6 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="status info" id="ed25519MyStatus">Ключи подписи не сгенерированы</div>
             </div>
 
@@ -812,7 +816,6 @@
                         <div style="color: #dc3545; font-weight: bold; margin: 10px 0;">❌ НЕ совпадают!</div>
                     </div>
                 </div>
-
                 <div class="status info" id="ed25519FriendStatus">Ключ подписи собеседника не установлен</div>
             </div>
         </div>
@@ -821,29 +824,21 @@
     <!-- ==================== Вкладка ЧАТ ==================== -->
     <div id="chat" class="tab-content">
         <div class="chat-container">
-            <!-- Шапка -->
             <div class="chat-header">
                 <div>
                     <h3>💬 Защищённый чат</h3>
-                    <div class="chat-header-status" id="chatHeaderStatus">
-                        🔒 Ключ не установлен
-                    </div>
+                    <div class="chat-header-status" id="chatHeaderStatus">🔒 Ключ не установлен</div>
                 </div>
                 <button class="msg-action-btn" onclick="clearChat()" style="color: white; background: rgba(255,255,255,0.2);">🗑️ Очистить</button>
             </div>
 
-            <!-- Область сообщений -->
             <div class="chat-messages" id="chatMessages">
                 <div class="chat-empty">
                     <div class="chat-empty-icon">🔐</div>
-                    <div class="chat-empty-text">
-                        Установите XChaCha20-ключ на вкладке «Обмен ключами»,<br>
-                        затем вставляйте текст или файлы для шифрования / расшифровки
-                    </div>
+                    <div class="chat-empty-text">Установите гибридный ключ на вкладке «Обмен ключами»</div>
                 </div>
             </div>
 
-            <!-- Reply-бар -->
             <div class="chat-reply-bar" id="chatReplyBar">
                 <div class="chat-reply-bar-content">
                     <div class="chat-reply-bar-sender" id="replyBarSender"></div>
@@ -852,7 +847,6 @@
                 <button class="chat-reply-bar-close" onclick="cancelReply()">✕</button>
             </div>
 
-            <!-- Превью файла -->
             <div class="chat-file-preview" id="chatFilePreview">
                 <span>📎</span>
                 <span id="chatFilePreviewName" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
@@ -860,27 +854,18 @@
                 <button class="chat-file-preview-close" onclick="clearAttachedFile()">✕</button>
             </div>
 
-            <!-- Поле ввода -->
             <div class="chat-input-area">
-                <button class="chat-attach-btn" onclick="document.getElementById('chatFileInput').click()" title="Прикрепить файл">
-                    📎
-                </button>
+                <button class="chat-attach-btn" onclick="document.getElementById('chatFileInput').click()" title="Прикрепить файл">📎</button>
                 <input type="file" id="chatFileInput" style="display:none;">
-                <button class="chat-attach-btn" id="btnVoiceRecord" onclick="toggleVoiceRecord()" title="Записать голосовое">
-                    🎤
-                </button>
+                <button class="chat-attach-btn" id="btnVoiceRecord" onclick="toggleVoiceRecord()" title="Записать голосовое">🎤</button>
 
                 <div class="chat-input-wrapper">
                     <textarea class="chat-input" id="chatInput" placeholder="Введите сообщение или вставьте шифротекст..." rows="1"></textarea>
                 </div>
 
                 <div class="chat-send-btns">
-                    <button class="chat-send-btn chat-encrypt-btn" id="btnEncrypt" title="Зашифровать" onclick="chatEncrypt()">
-                        🔒
-                    </button>
-                    <button class="chat-send-btn chat-decrypt-btn" id="btnDecrypt" title="Расшифровать" onclick="chatDecrypt()">
-                        🔓
-                    </button>
+                    <button class="chat-send-btn chat-encrypt-btn" id="btnEncrypt" title="Зашифровать" onclick="chatEncrypt()">🔒</button>
+                    <button class="chat-send-btn chat-decrypt-btn" id="btnDecrypt" title="Расшифровать" onclick="chatDecrypt()">🔓</button>
                 </div>
             </div>
         </div>
@@ -894,61 +879,54 @@
 
 <script>
 // =====================================================================
-// ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+// ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ И БЕЗОПАСНАЯ ОЧИСТКА ПАМЯТИ
 // =====================================================================
 const te = new TextEncoder();
 const td = new TextDecoder();
 
 function secureZero(obj) {
     if (!obj) return;
-
+    try { if (typeof sodium !== 'undefined' && sodium.memzero) { sodium.memzero(obj); return; } } catch {}
     try {
-        if (typeof sodium !== 'undefined' && sodium.memzero) {
-            sodium.memzero(obj);
-            return;
-        }
-    } catch {}
-
-    try {
-        if (obj instanceof Uint8Array) {
-            obj.fill(0);
-        }
-
-        if (ArrayBuffer.isView(obj)) {
-            obj.fill(0);
-        }
-
-        if (obj instanceof ArrayBuffer) {
-            new Uint8Array(obj).fill(0);
-        }
+        if (obj instanceof Uint8Array) obj.fill(0);
+        if (ArrayBuffer.isView(obj)) obj.fill(0);
+        if (obj instanceof ArrayBuffer) new Uint8Array(obj).fill(0);
     } catch {}
 }
 
 let currentSymmetricKey = null;
-let myKxKeyPair = null;
-let myPublicKeyBuffer = null;
-let isInitiatorRole = null; 
-let myEcdhFingerprintStr = '';
 let derivedAesKeyRaw = null;
+
+// Hybrid keys (X25519 + ML-KEM)
+let myKxKeyPair = null;          
+let myMlKemKeyPair = null;       
+let myCombinedPublicKeyBuf = null; 
+let myHybridFingerprintStr = '';
+
+let isInitiatorRole = null; 
+let pqcSharedSecret = null;     
+let mlKemCiphertext = null;     
+let isMlKemReady = false;
+
+// Временное хранение классического секрета до инкапсуляции
+let tempSClassic = null;
+let tempFriendX25519Pk = null;
 
 let myEd25519PrivateKey = null;
 let myEd25519PublicKeyRaw = null;
 let myEd25519PrivateKeyPkcs8 = null;
-let friendEd25519PublicKey = null;
 let friendEd25519PublicKeyRaw = null;
 let ed25519SigningEnabled = false;
 let ed25519VerifyEnabled = false;
 
-// Чат
+// Переменные чата (v5.1.1 Engine)
 let chatMessageCounter = 0;
-let chatAttachedFile = null;      
-let replyToGlobalId = null;       // Глобальный ID (UUID) вместо локального ID
+let chatAttachedFile = null;
+let replyToGlobalId = null;       // Глобальный ID (UUID) вместо локального
 const globalToLocalMap = new Map(); // Связка: globalId -> localMsgId (для авто-скролла)
 let mediaObjectUrls = [];         
-
 const replyInfoCache = new Map(); // gId -> { sender, preview, exists }
 
-const HKDF_INFO = te.encode("ECDH-P384-AES256-KEY-DERIVATION-V2");
 const AAD_MESSAGE = te.encode("SecureMessenger-MSG");
 const AAD_FILE = te.encode("SecureMessenger-FILE");
 
@@ -961,13 +939,11 @@ const MAX_FUTURE_TOLERANCE_MS = 60 * 1000;
 const themeNames = { cream:'Кремовая', dark:'Тёмная', rose:'Розовая', ocean:'Океан', forest:'Лесная', midnight:'Полночь'};
 
 // =====================================================================
-// УТИЛИТЫ
+// УТИЛИТЫ И DOUBLE RATCHET
 // =====================================================================
-
-// DOUBLE RATCHET ENGINE
 const Ratchet = {
     state: { RK: null, CKs: null, CKr: null, DHs: null, DHr: null, Ns: 0, Nr: 0, PN: 0, skipped: {} },
-    MAX_SKIP: 100, 
+    MAX_SKIP: 100,
 
     KDF_RK: function(rk, dh_out) {
         const out = sodium.crypto_generichash(64, dh_out, rk);
@@ -980,17 +956,17 @@ const Ratchet = {
         return { CK: next_ck, MK: mk };
     },
 
-    init: function(sharedSecret, isAlice, friendStaticPub, myStaticKeyPair) {
+    init: function(sharedSecret, isAlice, friendStaticPubX25519, myStaticKeyPairX25519) {
         this.state = { RK: sharedSecret, CKs: null, CKr: null, DHs: null, DHr: null, Ns: 0, Nr: 0, PN: 0, skipped: {} };
         if (isAlice) {
             this.state.DHs = sodium.crypto_kx_keypair();
-            this.state.DHr = friendStaticPub;
+            this.state.DHr = friendStaticPubX25519;
             const dh_out = sodium.crypto_scalarmult(this.state.DHs.privateKey, this.state.DHr);
             const kdf = this.KDF_RK(this.state.RK, dh_out);
             this.state.RK = kdf.RK;
             this.state.CKs = kdf.CK;
         } else {
-            this.state.DHs = myStaticKeyPair;
+            this.state.DHs = myStaticKeyPairX25519;
         }
     },
 
@@ -998,20 +974,14 @@ const Ratchet = {
         if (!this.state.CKs) throw new Error("Подождите, пока Инициатор пришлет первое сообщение.");
         const kdf = this.KDF_CK(this.state.CKs);
         this.state.CKs = kdf.CK;
-        const header = {
-            dh: arrayBufferToBase64(this.state.DHs.publicKey),
-            n: this.state.Ns,
-            pn: this.state.PN
-        };
+        const header = { dh: arrayBufferToBase64(this.state.DHs.publicKey), n: this.state.Ns, pn: this.state.PN };
         this.state.Ns++;
         return { mk: kdf.MK, header: header };
     },
 
     ratchetDecryptTentative: function(header) {
         const skipKey = header.dh + '_' + header.n;
-        if (this.state.skipped[skipKey]) {
-            return { mk: this.state.skipped[skipKey], tentativeState: null, skipKeyToRemove: skipKey };
-        }
+        if (this.state.skipped[skipKey]) return { mk: this.state.skipped[skipKey], tentativeState: null, skipKeyToRemove: skipKey };
 
         let tempState = {
             RK: new Uint8Array(this.state.RK),
@@ -1028,45 +998,32 @@ const Ratchet = {
             this.skipMessageKeys(tempState, header.pn);
             this.DHRatchetStep(tempState, dh_pub);
         }
+
         this.skipMessageKeys(tempState, header.n);
-        
         const kdf = this.KDF_CK(tempState.CKr);
         tempState.CKr = kdf.CK;
         tempState.Nr++;
-
         return { mk: kdf.MK, tentativeState: tempState, skipKeyToRemove: null };
     },
 
     commitState: function(tentativeState, skipKeyToRemove) {
-        if (skipKeyToRemove) {
-            secureZero(this.state.skipped[skipKeyToRemove]);
-            delete this.state.skipped[skipKeyToRemove];
-        }
-        if (tentativeState) {
-            this.state = tentativeState;
-        }
+        if (skipKeyToRemove) { secureZero(this.state.skipped[skipKeyToRemove]); delete this.state.skipped[skipKeyToRemove]; }
+        if (tentativeState) this.state = tentativeState;
     },
 
     DHRatchetStep: function(state, dh_pub) {
-        state.PN = state.Ns;
-        state.Ns = 0;
-        state.Nr = 0;
-        state.DHr = dh_pub;
-
+        state.PN = state.Ns; state.Ns = 0; state.Nr = 0; state.DHr = dh_pub;
         let dh_out = sodium.crypto_scalarmult(state.DHs.privateKey, state.DHr);
         let kdf = this.KDF_RK(state.RK, dh_out);
-        state.RK = kdf.RK;
-        state.CKr = kdf.CK;
-
+        state.RK = kdf.RK; state.CKr = kdf.CK;
         state.DHs = sodium.crypto_kx_keypair();
         dh_out = sodium.crypto_scalarmult(state.DHs.privateKey, state.DHr);
         kdf = this.KDF_RK(state.RK, dh_out);
-        state.RK = kdf.RK;
-        state.CKs = kdf.CK;
+        state.RK = kdf.RK; state.CKs = kdf.CK;
     },
 
     skipMessageKeys: function(state, until_n) {
-        if (state.Nr + this.MAX_SKIP < until_n) throw new Error("Превышен лимит пропуска сообщений (защита от DoS)");
+        if (state.Nr + this.MAX_SKIP < until_n) throw new Error("Превышен лимит пропуска (защита от DoS)");
         if (state.CKr != null) {
             while (state.Nr < until_n) {
                 const kdf = this.KDF_CK(state.CKr);
@@ -1112,15 +1069,11 @@ function extractTimestamp(b) {
 }
 function validateMessageTime(msgTs) {
     const now = Date.now(), age = now - msgTs;
-    if (msgTs > now + MAX_FUTURE_TOLERANCE_MS)
-        return { valid:false, warning:true, reason:'future', message:`⚠️ Из будущего (${Math.round((msgTs-now)/1000)}с)` };
-    if (age > MAX_MESSAGE_AGE_MS)
-        return { valid:true, warning:true, reason:'old', message:`⚠️ Старое (${Math.round(age/60000)} мин)` };
+    if (msgTs > now + MAX_FUTURE_TOLERANCE_MS) return { valid:false, warning:true, reason:'future', message:`⚠️ Из будущего` };
+    if (age > MAX_MESSAGE_AGE_MS) return { valid:true, warning:true, reason:'old', message:`⚠️ Старое` };
     return { valid:true, warning:false };
 }
-function formatTime(date) {
-    return date.getHours().toString().padStart(2,'0') + ':' + date.getMinutes().toString().padStart(2,'0');
-}
+function formatTime(date) { return date.getHours().toString().padStart(2,'0') + ':' + date.getMinutes().toString().padStart(2,'0'); }
 function formatFileSize(bytes) {
     if (bytes < 1024) return bytes + ' Б';
     if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' КБ';
@@ -1129,54 +1082,35 @@ function formatFileSize(bytes) {
 
 async function generateFingerprint(buf) {
     const hash = new Uint8Array(await crypto.subtle.digest('SHA-512', buf));
-    const b64 = btoa(String.fromCharCode(...hash.slice(0,12)));
-    const b64url = b64.replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+    const b64 = btoa(String.fromCharCode(...hash.slice(0,12))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
     let emoji = '';
     for (let i = 12; i < 18; i++) emoji += EMOJIS[hash[i] % EMOJIS.length];
-    return `${b64url} ${emoji}`;
+    return `${b64} ${emoji}`;
 }
 
-async function deriveSessionSalt(myBuf, friendBuf) {
-    const a = new Uint8Array(myBuf), b = new Uint8Array(friendBuf);
-    let cmp = 0;
-    for (let i = 0; i < Math.min(a.length, b.length); i++) {
-        if (a[i] < b[i]) { cmp = -1; break; } else if (a[i] > b[i]) { cmp = 1; break; }
-    }
-    if (cmp === 0) cmp = a.length - b.length;
-    const first = cmp <= 0 ? a : b, second = cmp <= 0 ? b : a;
-    const combined = new Uint8Array(first.length + second.length);
-    combined.set(first,0); combined.set(second, first.length);
-    return new Uint8Array(await crypto.subtle.digest('SHA-256', combined));
-}
-
-// Безопасный список MIME
 const SAFE_MEDIA_TYPES = {
     'image/png':'image','image/jpeg':'image','image/gif':'image','image/webp':'image','image/bmp':'image',
     'video/mp4':'video','video/webm':'video','video/ogg':'video',
     'audio/mpeg':'audio','audio/ogg':'audio','audio/wav':'audio','audio/webm':'audio','audio/mp4':'audio'
 };
-
 function getVerifiedMediaType(buf) {
-    const a = new Uint8Array(buf);
-    if (a.length < 4) return null;
+    const a = new Uint8Array(buf); if (a.length < 4) return null;
     if (a.length>=8 && a[0]===0x89&&a[1]===0x50&&a[2]===0x4E&&a[3]===0x47&&a[4]===0x0D&&a[5]===0x0A&&a[6]===0x1A&&a[7]===0x0A) return 'image/png';
     if (a[0]===0xFF&&a[1]===0xD8&&a[2]===0xFF) return 'image/jpeg';
     if (a[0]===0x47&&a[1]===0x49&&a[2]===0x46&&a[3]===0x38) return 'image/gif';
     if (a.length>=12&&a[0]===0x52&&a[1]===0x49&&a[2]===0x46&&a[3]===0x46&&a[8]===0x57&&a[9]===0x45&&a[10]===0x42&&a[11]===0x50) return 'image/webp';
     if (a[0]===0x42&&a[1]===0x4D) return 'image/bmp';
     if (a.length>=8&&a[4]===0x66&&a[5]===0x74&&a[6]===0x79&&a[7]===0x70) return 'video/mp4';
-    if (a[0]===0x1A && a[1]===0x45 && a[2]===0xDF && a[3]===0xA3) return 'video/webm';
+    if (a[0]===0x1A&&a[1]===0x45&&a[2]===0xDF&&a[3]===0xA3) return 'video/webm';
     if (a[0]===0x4F&&a[1]===0x67&&a[2]===0x67&&a[3]===0x53) return 'audio/ogg';
     if (a.length>=12&&a[0]===0x52&&a[1]===0x49&&a[2]===0x46&&a[3]===0x46&&a[8]===0x57&&a[9]===0x41&&a[10]===0x56&&a[11]===0x45) return 'audio/wav';
     if ((a[0]===0xFF&&(a[1]===0xFB||a[1]===0xF3||a[1]===0xF2))||(a[0]===0x49&&a[1]===0x44&&a[2]===0x33)) return 'audio/mpeg';
     return null;
 }
-
 function containsScriptContent(buf) {
     const txt = new TextDecoder('ascii',{fatal:false}).decode(new Uint8Array(buf).slice(0,1024)).toLowerCase();
     return ['<script','javascript:','onerror=','onload=','<svg','<html','<iframe','<object','<embed'].some(p=>txt.includes(p));
 }
-
 function getFileIconEmoji(type) {
     if (!type) return '📄';
     if (type.startsWith('image/')) return '🖼️';
@@ -1188,55 +1122,216 @@ function getFileIconEmoji(type) {
 }
 
 // =====================================================================
-// ТЕМЫ
+// PQC MODULE (ML-KEM-768)
+// =====================================================================
+let noblePqModule = null;
+async function getNobleMlKem() {
+    if (noblePqModule) return noblePqModule;
+    try {
+        noblePqModule = await import('https://esm.sh/@noble/post-quantum@0.5.4/ml-kem.js');
+        return noblePqModule;
+    } catch (e) { throw new Error('Не удалось загрузить @noble/post-quantum: ' + e.message); }
+}
+
+// =====================================================================
+// ГИБРИДНЫЙ ОБМЕН КЛЮЧАМИ (Combined Generation)
+// =====================================================================
+document.getElementById('generateHybridKeysBtn').addEventListener('click', async () => {
+    try {
+        await sodium.ready;
+        const { ml_kem768 } = await getNobleMlKem();
+
+        myKxKeyPair = sodium.crypto_kx_keypair();
+        myMlKemKeyPair = ml_kem768.keygen();
+
+        // Склеиваем 32 байта X25519 и 1184 байта ML-KEM
+        const combined = new Uint8Array(32 + 1184);
+        combined.set(new Uint8Array(myKxKeyPair.publicKey), 0);
+        combined.set(myMlKemKeyPair.publicKey, 32);
+
+        myCombinedPublicKeyBuf = combined.buffer;
+        
+        document.getElementById('myHybridPublicKey').value = arrayBufferToBase64(myCombinedPublicKeyBuf);
+        myHybridFingerprintStr = await generateFingerprint(myCombinedPublicKeyBuf);
+        document.getElementById('myHybridFingerprint').textContent = myHybridFingerprintStr;
+        
+        showStatus('success', '🧬 Гибридные ключи сгенерированы (X25519 + ML-KEM)!');
+    } catch(e) { showStatus('error', 'Ошибка генерации: ' + e.message); }
+});
+
+async function updateFriendHybridFingerprint() {
+    const b64 = document.getElementById('friendHybridPublicKey').value.trim();
+    const block = document.getElementById('friendHybridVerification');
+    const fp = document.getElementById('friendHybridFingerprint');
+    
+    block.style.display = 'none'; fp.textContent = '—';
+    document.getElementById('hybridFingerprintMatch').style.display = 'none';
+    document.getElementById('hybridFingerprintMismatch').style.display = 'none';
+    if (!b64) return;
+    
+    try {
+        const buf = base64ToArrayBuffer(b64);
+        if (buf.byteLength !== (32 + 1184)) { // 1216
+            fp.textContent = '❌ Неверный размер ключа (должен быть 1216 байт)';
+            block.style.display = 'block'; return;
+        }
+        fp.textContent = await generateFingerprint(buf);
+        block.style.display = 'block';
+    } catch(e) { 
+        fp.textContent = '❌ Ошибка чтения Base64'; 
+        block.style.display = 'block'; 
+    }
+}
+
+document.getElementById('verifyHybridFingerprintBtn').addEventListener('click', () => {
+    const computed = document.getElementById('friendHybridFingerprint').textContent||'';
+    const provided = document.getElementById('friendProvidedHybridFingerprint').value.trim();
+    if (computed==='—') { alert('Сначала вставьте ключ собеседника'); return; }
+    if (!provided) { alert('Вставьте отпечаток собеседника'); return; }
+    
+    const m = document.getElementById('hybridFingerprintMatch');
+    const mm = document.getElementById('hybridFingerprintMismatch');
+    
+    if (provided.replace(/\s+/g,'') === computed.replace(/\s+/g,'')) {
+        m.style.display='block'; mm.style.display='none'; showStatus('success','Отпечатки совпадают!');
+    } else {
+        m.style.display='none'; mm.style.display='block'; showStatus('error','Отпечатки НЕ совпадают!');
+    }
+});
+
+// Установка соединения (Вычисление ролей и инкапсуляция)
+document.getElementById('establishConnectionBtn').addEventListener('click', async () => {
+    try {
+        await sodium.ready;
+        if (!myCombinedPublicKeyBuf || !myKxKeyPair || !myMlKemKeyPair) {
+            showStatus('error', 'Сначала сгенерируйте свои ключи!'); return;
+        }
+        
+        const friendB64 = document.getElementById('friendHybridPublicKey').value.trim();
+        if (!friendB64) { showStatus('error', 'Вставьте ключ собеседника'); return; }
+        
+        const friendBuf = base64ToArrayBuffer(friendB64);
+        if (friendBuf.byteLength !== 1216) {
+            showStatus('error', 'Неверный формат ключа собеседника (ожидается 1216 байт)'); return;
+        }
+
+        const friendX25519Pk = new Uint8Array(friendBuf.slice(0, 32));
+        const friendMlKemPk = new Uint8Array(friendBuf.slice(32, 1216));
+
+        // Вычисляем классический секрет
+        const sClassic = sodium.crypto_scalarmult(myKxKeyPair.privateKey, friendX25519Pk);
+        
+        // Определяем кто Инициатор (по X25519)
+        const myX25519Pk = new Uint8Array(myKxKeyPair.publicKey);
+        let cmp = 0;
+        for (let i = 0; i < 32; i++) {
+            if (myX25519Pk[i] < friendX25519Pk[i]) { cmp = -1; break; }
+            else if (myX25519Pk[i] > friendX25519Pk[i]) { cmp = 1; break; }
+        }
+        
+        isInitiatorRole = cmp < 0;
+        tempSClassic = sClassic;
+        tempFriendX25519Pk = friendX25519Pk;
+
+        const { ml_kem768 } = await getNobleMlKem();
+        document.getElementById('ciphertextSection').style.display = 'block';
+
+        if (isInitiatorRole) {
+            // Инициатор: инкапсуляция ML-KEM
+            const result = ml_kem768.encapsulate(friendMlKemPk);
+            pqcSharedSecret = result.sharedSecret;
+            mlKemCiphertext = result.cipherText;
+            
+            // Вывод кода
+            document.getElementById('mlKemCiphertextOutput').value = arrayBufferToBase64(mlKemCiphertext.buffer);
+            document.getElementById('initiatorBlock').style.display = 'block';
+            document.getElementById('responderBlock').style.display = 'none';
+            
+            // Инициализируем сразу (мы инициатор)
+            finalizeHybridMix();
+            showStatus('success', '🔐 Вы Инициатор. Передайте код подтверждения.');
+        } else {
+            // Принимающий: ожидаем ввода кода подтверждения
+            document.getElementById('initiatorBlock').style.display = 'none';
+            document.getElementById('responderBlock').style.display = 'block';
+            showStatus('info', 'Вы Принимающий. Запросите код подтверждения у собеседника.');
+        }
+
+    } catch(e) { showStatus('error','Ошибка соединения: ' + e.message); }
+});
+
+// Завершение соединения принимающим
+async function completeResponderConnection() {
+    try {
+        const ctB64 = document.getElementById('mlKemCiphertextInput').value.trim();
+        if (!ctB64) { showStatus('error', 'Вставьте код подтверждения'); return; }
+
+        const ctBuf = new Uint8Array(base64ToArrayBuffer(ctB64));
+        if (ctBuf.byteLength !== 1088) { // Ciphertext for ML-KEM-768
+            showStatus('error', 'Неверный размер кода подтверждения'); return;
+        }
+
+        const { ml_kem768 } = await getNobleMlKem();
+        pqcSharedSecret = ml_kem768.decapsulate(ctBuf, myMlKemKeyPair.secretKey);
+        
+        finalizeHybridMix();
+        showStatus('success', '🧬 Гибридный ключ активирован! Переходите в чат.');
+    } catch(e) { showStatus('error', 'Ошибка деинкапсуляции: ' + e.message); }
+}
+
+// Финальный гибридный микс BLAKE2b(S_classic || S_pqc) -> Ratchet
+function finalizeHybridMix() {
+    const combined = new Uint8Array(tempSClassic.length + pqcSharedSecret.length);
+    combined.set(tempSClassic, 0);
+    combined.set(pqcSharedSecret, tempSClassic.length);
+
+    const finalKey = sodium.crypto_generichash(
+        sodium.crypto_aead_xchacha20poly1305_ietf_KEYBYTES,
+        combined
+    );
+
+    currentSymmetricKey = finalKey;
+    derivedAesKeyRaw = finalKey;
+
+    // Ratchet инициализируется X25519-частью ключа собеседника для правильной математики
+    Ratchet.init(currentSymmetricKey, isInitiatorRole, tempFriendX25519Pk, myKxKeyPair);
+
+    isMlKemReady = true;
+    updateChatEmptyState();
+    updateChatHeader();
+}
+
+// =====================================================================
+// ТЕМЫ, UI и УТИЛИТЫ
 // =====================================================================
 function toggleThemePanel() {
     const o = document.getElementById('theme-options');
-    o.classList.toggle('show');
-    document.getElementById('theme-arrow').textContent = o.classList.contains('show') ? '▲' : '▼';
+    o.classList.toggle('show'); document.getElementById('theme-arrow').textContent = o.classList.contains('show') ? '▲' : '▼';
 }
 function setTheme(name) {
-    const html = document.documentElement;
-    html.removeAttribute('data-theme');
+    const html = document.documentElement; html.removeAttribute('data-theme');
     if (name !== 'cream') html.setAttribute('data-theme', name);
     document.getElementById('current-theme-name').textContent = themeNames[name];
-    document.querySelectorAll('.theme-option').forEach(o => {
-        o.classList.toggle('active', o.dataset.theme === name);
-    });
+    document.querySelectorAll('.theme-option').forEach(o => o.classList.toggle('active', o.dataset.theme === name));
     localStorage.setItem('theme', name);
 }
 function loadTheme() { setTheme(localStorage.getItem('theme') || 'cream'); }
 
-// =====================================================================
-// ВКЛАДКИ
-// =====================================================================
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        tab.classList.add('active');
-        document.getElementById(tab.dataset.tab).classList.add('active');
+        tab.classList.add('active'); document.getElementById(tab.dataset.tab).classList.add('active');
     });
 });
 
-// =====================================================================
-// STATUS TOAST
-// =====================================================================
 function showStatus(type, message) {
-    const d = document.createElement('div');
-    d.className = `status ${type}`;
-    d.textContent = message;
-    Object.assign(d.style, {
-        position:'fixed', top:'20px', left:'50%', transform:'translateX(-50%)',
-        zIndex:'1001', minWidth:'300px', maxWidth:'90%', textAlign:'center', animation:'fadeIn 0.3s ease'
-    });
+    const d = document.createElement('div'); d.className = `status ${type}`; d.textContent = message;
+    Object.assign(d.style, { position:'fixed', top:'20px', left:'50%', transform:'translateX(-50%)', zIndex:'1001', minWidth:'300px', maxWidth:'90%', textAlign:'center', animation:'fadeIn 0.3s ease' });
     document.body.appendChild(d);
     setTimeout(() => { d.style.opacity='0'; d.style.transition='opacity 0.3s'; setTimeout(()=>d.remove(),300); }, 4000);
 }
 
-// =====================================================================
-// ПОЛЯ: копировать / вставить / очистить
-// =====================================================================
 async function copyField(id) {
     try {
         const el = document.getElementById(id);
@@ -1253,106 +1348,11 @@ async function pasteToField(id) {
     } catch(e) { showStatus('error','Ошибка: '+e.message); }
 }
 function clearField(id) {
-    const el = document.getElementById(id);
-    el.value = '';
-    el.dispatchEvent(new Event('input',{bubbles:true}));
+    const el = document.getElementById(id); el.value = ''; el.dispatchEvent(new Event('input',{bubbles:true}));
 }
 
 // =====================================================================
-// ECDH P-384
-// =====================================================================
-
-async function updateFriendEcdhFingerprint() {
-    const b64 = document.getElementById('friendsEcdhPublicKey').value.trim();
-    const block = document.getElementById('friendEcdhVerification');
-    const fp = document.getElementById('friendEcdhFingerprint');
-    block.style.display = 'none'; fp.textContent = '—';
-    document.getElementById('ecdhFingerprintMatch').style.display = 'none';
-    document.getElementById('ecdhFingerprintMismatch').style.display = 'none';
-    if (!b64) return;
-    try {
-        const buf = base64ToArrayBuffer(b64);
-        if (buf.byteLength !== 32) { 
-            fp.textContent = '❌ Неверный размер ключа X25519'; 
-            block.style.display = 'block'; 
-            return; 
-        }
-        fp.textContent = await generateFingerprint(buf);
-        block.style.display = 'block';
-    } catch(e) { 
-        fp.textContent = '❌ Ошибка чтения Base64'; 
-        block.style.display = 'block'; 
-    }
-}
-
-function verifyEcdhFingerprint() {
-    const computed = document.getElementById('friendEcdhFingerprint').textContent||'';
-    const provided = document.getElementById('friendProvidedEcdhFingerprint').value.trim();
-    if (computed==='—') { alert('Сначала вставьте ключ друга'); return; }
-    if (!provided) { alert('Вставьте отпечаток друга'); return; }
-    const m = document.getElementById('ecdhFingerprintMatch');
-    const mm = document.getElementById('ecdhFingerprintMismatch');
-    if (provided.replace(/\s+/g,'') === computed.replace(/\s+/g,'')) {
-        m.style.display='block'; mm.style.display='none'; showStatus('success','Отпечатки совпадают!');
-    } else {
-        m.style.display='none'; mm.style.display='block'; showStatus('error','Отпечатки НЕ совпадают!');
-    }
-}
-
-document.getElementById('generateEcdhKeys').addEventListener('click', async () => {
-    try {
-        await sodium.ready;
-        myKxKeyPair = sodium.crypto_kx_keypair();
-        myPublicKeyBuffer = myKxKeyPair.publicKey.buffer; 
-        document.getElementById('ecdhPublicKey').value = arrayBufferToBase64(myPublicKeyBuffer);
-        
-        myEcdhFingerprintStr = await generateFingerprint(myPublicKeyBuffer);
-        document.getElementById('myEcdhFingerprint').textContent = myEcdhFingerprintStr;
-        showStatus('success','X25519 ключи сгенерированы!');
-    } catch(e) { showStatus('error','Ошибка: '+e.message); }
-});
-
-document.getElementById('computeAndUseSharedSecret').addEventListener('click', async () => {
-    try {
-        await sodium.ready;
-        const friendB64 = document.getElementById('friendsEcdhPublicKey').value.trim();
-        if (!friendB64 || !myKxKeyPair) { showStatus('error','Сначала сгенерируйте ключи и введите ключ друга'); return; }
-        
-        const friendBuf = base64ToArrayBuffer(friendB64);
-        const friendPk = new Uint8Array(friendBuf);
-
-        if (friendPk.length !== sodium.crypto_kx_PUBLICKEYBYTES) {
-            showStatus('error', 'Неверная длина публичного ключа X25519'); return;
-        }
-
-        const sharedSecret = sodium.crypto_scalarmult(myKxKeyPair.privateKey, friendPk);
-        const salt = await deriveSessionSalt(myPublicKeyBuffer, friendBuf);
-        const keyMaterial = new Uint8Array(sharedSecret.length + salt.length);
-        keyMaterial.set(sharedSecret, 0);
-        keyMaterial.set(salt, sharedSecret.length);
-        
-        currentSymmetricKey = sodium.crypto_generichash(sodium.crypto_aead_xchacha20poly1305_ietf_KEYBYTES, keyMaterial);
-        derivedAesKeyRaw = currentSymmetricKey; 
-
-        const a = new Uint8Array(myPublicKeyBuffer);
-        let cmp = 0;
-        for (let i = 0; i < 32; i++) {
-            if (a[i] < friendPk[i]) { cmp = -1; break; } 
-            else if (a[i] > friendPk[i]) { cmp = 1; break; }
-        }
-
-        const isInitiator = cmp < 0;
-        isInitiatorRole = isInitiator;
-        Ratchet.init(currentSymmetricKey, isInitiator, friendPk, myKxKeyPair);
-        updateChatEmptyState();
-
-        updateChatHeader();
-        showStatus('success','✅ Ключ XChaCha20 вычислен и установлен! Перейдите в чат.');
-    } catch(e) { showStatus('error','Ошибка: '+e.message); }
-});
-
-// =====================================================================
-// Ed25519 
+// ED25519 ПОДПИСИ
 // =====================================================================
 async function generateEd25519KeyPair() {
     try {
@@ -1360,20 +1360,15 @@ async function generateEd25519KeyPair() {
         myEd25519PublicKeyRaw = await crypto.subtle.exportKey("raw", keyPair.publicKey);
         const pubKeyEl = document.getElementById('myEd25519PublicKey');
         if (pubKeyEl) pubKeyEl.value = arrayBufferToBase64(myEd25519PublicKeyRaw);
-        
         myEd25519PrivateKeyPkcs8 = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
         myEd25519PrivateKey = await crypto.subtle.importKey("pkcs8", myEd25519PrivateKeyPkcs8, {name:"Ed25519"}, false, ["sign"]);
-
         document.getElementById('myEd25519Fingerprint').textContent = await generateFingerprint(myEd25519PublicKeyRaw);
         document.getElementById('ed25519KeysGenerated').style.display = 'block';
         ed25519SigningEnabled = true;
         document.getElementById('ed25519MyStatus').className = 'status success';
         document.getElementById('ed25519MyStatus').textContent = '✅ Ключи Ed25519 готовы!';
-        updateChatHeader();
-        showStatus('success', 'Ed25519 ключи сгенерированы!');
-    } catch(e) { 
-        showStatus('error', 'Ошибка генерации Ed25519: ' + e.message); 
-    }
+        updateChatHeader(); showStatus('success', 'Ed25519 ключи сгенерированы!');
+    } catch(e) { showStatus('error', 'Ошибка генерации Ed25519: ' + e.message); }
 }
 
 async function importEd25519PrivateKey() {
@@ -1386,18 +1381,14 @@ async function importEd25519PrivateKey() {
         const pub = await crypto.subtle.importKey("jwk", {crv:jwk.crv, kty:jwk.kty, x:jwk.x}, {name:"Ed25519"}, true, ["verify"]);
         myEd25519PublicKeyRaw = await crypto.subtle.exportKey("raw", pub);
         myEd25519PrivateKey = await crypto.subtle.importKey("pkcs8", buf, {name:"Ed25519"}, false, ["sign"]);
-        
-        const pubKeyEl = document.getElementById('myEd25519PublicKey');
-        if (pubKeyEl) pubKeyEl.value = arrayBufferToBase64(myEd25519PublicKeyRaw);
+        document.getElementById('myEd25519PublicKey').value = arrayBufferToBase64(myEd25519PublicKeyRaw);
         myEd25519PrivateKeyPkcs8 = buf;
-        
         document.getElementById('myEd25519Fingerprint').textContent = await generateFingerprint(myEd25519PublicKeyRaw);
         document.getElementById('ed25519KeysGenerated').style.display='block';
         ed25519SigningEnabled = true;
         document.getElementById('ed25519MyStatus').className='status success';
         document.getElementById('ed25519MyStatus').textContent='✅ Приватный ключ импортирован!';
-        updateChatHeader();
-        showStatus('success','Приватный ключ импортирован!');
+        updateChatHeader(); showStatus('success','Приватный ключ импортирован!');
     } catch(e) { showStatus('error','Ошибка: '+e.message); }
 }
 
@@ -1407,26 +1398,19 @@ async function importFriendEd25519Key() {
         if (!b64Str) { showStatus('error', 'Вставьте публичный ключ подписи'); return false; }
         const buf = base64ToArrayBuffer(b64Str);
         if (buf.byteLength !== 32) throw new Error("Неверная длина (должна быть 32 байта)");
-        
         friendEd25519PublicKeyRaw = buf;
         ed25519VerifyEnabled = true;
-        
         document.getElementById('ed25519FriendStatus').className = 'status success';
         document.getElementById('ed25519FriendStatus').textContent = '✅ Ключ подписи собеседника установлен!';
-        updateChatHeader();
-        showStatus('success', 'Ключ подписи собеседника установлен!');
-        return true;
-    } catch(e) {
-        showStatus('error', "Ошибка: " + e.message); return false;
-    }
+        updateChatHeader(); showStatus('success', 'Ключ подписи установлен!'); return true;
+    } catch(e) { showStatus('error', "Ошибка: " + e.message); return false; }
 }
 
 async function updateFriendEd25519Fingerprint() {
     const b64 = document.getElementById('friendEd25519PublicKey').value.trim();
     if (!b64) { document.getElementById('friendEd25519Verification').style.display='none'; return; }
     try {
-        const buf = base64ToArrayBuffer(b64);
-        if (buf.byteLength !== 32) return;
+        const buf = base64ToArrayBuffer(b64); if (buf.byteLength !== 32) return;
         document.getElementById('friendEd25519Fingerprint').textContent = await generateFingerprint(buf);
         document.getElementById('friendEd25519Verification').style.display='block';
     } catch(e) {}
@@ -1449,35 +1433,23 @@ async function signData(data) {
     if (!ed25519SigningEnabled || !myEd25519PrivateKey) return null;
     try {
         const bytes = (typeof data === 'string') ? te.encode(data) : new Uint8Array(data);
-        const sigBuffer = await crypto.subtle.sign("Ed25519", myEd25519PrivateKey, bytes);
-        return new Uint8Array(sigBuffer);
-    } catch(e) { 
-        console.error("Ошибка подписи:", e); return null; 
-    }
+        return new Uint8Array(await crypto.subtle.sign("Ed25519", myEd25519PrivateKey, bytes));
+    } catch(e) { return null; }
 }
 
 async function verifySignature(data, sig) {
-    if (!ed25519VerifyEnabled || !friendEd25519PublicKeyRaw)
-        return { verified: false, reason: 'no_key', message: 'Ключ подписи друга не установлен' };
+    if (!ed25519VerifyEnabled || !friendEd25519PublicKeyRaw) return { verified: false, reason: 'no_key', message: 'Ключ подписи не установлен' };
     try {
         const bytes = (typeof data === 'string') ? te.encode(data) : new Uint8Array(data);
         const pubKey = await crypto.subtle.importKey("raw", friendEd25519PublicKeyRaw, {name: "Ed25519"}, true, ["verify"]);
         const isValid = await crypto.subtle.verify("Ed25519", pubKey, sig, bytes);
-        
-        return isValid 
-            ? { verified: true, reason: 'valid', message: '✅ Подпись верна' }
-            : { verified: false, reason: 'invalid', message: '❌ Подпись НЕДЕЙСТВИТЕЛЬНА!' };
-    } catch(e) { 
-        return { verified: false, reason: 'error', message: '⚠️ Ошибка проверки подписи: ' + e.message }; 
-    }
+        return isValid ? { verified: true, reason: 'valid', message: '✅ Подпись верна' } : { verified: false, reason: 'invalid', message: '❌ Подпись НЕДЕЙСТВИТЕЛЬНА!' };
+    } catch(e) { return { verified: false, reason: 'error', message: '⚠️ Ошибка проверки: ' + e.message }; }
 }
 
 // =====================================================================
-// ЧАТ: упаковка Payload (ИСПРАВЛЕНО ДЛЯ СОКРЫТИЯ МЕТАДАННЫХ)
+// ЧАТ: Упаковка метаданных Envelope v4 (от v5.1.1)
 // =====================================================================
-
-// Формат Envelope v4: { v: 4, type: "msg" | "file", ct: "...", rh: {...} }
-// Полностью скрывает replyInfo и fileName
 function buildEnvelope(type, ciphertextBase64, ratchetHeader = null) {
     const env = { v: 4, type, ct: ciphertextBase64 };
     if (ratchetHeader) env.rh = ratchetHeader;
@@ -1486,7 +1458,6 @@ function buildEnvelope(type, ciphertextBase64, ratchetHeader = null) {
 
 function parseEnvelope(text) {
     try {
-        // [ИСПРАВЛЕНО] Полностью удаляем все пробелы, переносы строк и табуляцию из Base64-строки
         const cleanedText = text.replace(/\s+/g, '');
         const decoded = atob(cleanedText);
         const json = JSON.parse(decodeURIComponent(escape(decoded)));
@@ -1494,17 +1465,14 @@ function parseEnvelope(text) {
             v: json.v, 
             type: json.type, 
             ct: json.ct, 
-            reply: json.reply, // Для старых версий < 4
-            fileName: json.fileName, // Для старых версий < 4
+            reply: json.reply, 
+            fileName: json.fileName, 
             rh: json.rh
         };
-    } catch(e) {
-        console.error("Ошибка парсинга конверта:", e);
-    }
+    } catch(e) { }
     return { v: 1, type: 'msg', ct: text, reply: null, fileName: null, rh: null };
 }
 
-// Упаковка метаданных + бинарных файлов в один внутренний буфер
 function packPayload(metadata, binaryData = null) {
     const metaBytes = te.encode(JSON.stringify(metadata));
     const metaLen = metaBytes.length;
@@ -1521,16 +1489,12 @@ function packPayload(metadata, binaryData = null) {
     return out;
 }
 
-// Распаковка внутреннего буфера в метаданные и файл
 function unpackPayload(bytes) {
-    if (!bytes || bytes.byteLength < 4) {
-        throw new Error("Неверная длина бинарного пакета (менее 4 байт)");
-    }
+    if (!bytes || bytes.byteLength < 4) throw new Error("Неверная длина бинарного пакета");
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const metaLen = view.getUint32(0, true);
-    if (bytes.byteLength < 4 + metaLen) {
-        throw new Error("Заявленная длина метаданных превышает размер пакета");
-    }
+    if (bytes.byteLength < 4 + metaLen) throw new Error("Заявленная длина метаданных превышает размер пакета");
+    
     const metaBytes = bytes.subarray(4, 4 + metaLen);
     const metadata = JSON.parse(td.decode(metaBytes));
     const binaryData = bytes.byteLength > 4 + metaLen ? bytes.subarray(4 + metaLen) : null;
@@ -1545,26 +1509,18 @@ async function encryptPayload(plainBytes, aadPrefix, messageKey) {
     const aad = new Uint8Array(aadPrefix.length + timestamp.length);
     aad.set(aadPrefix, 0); aad.set(timestamp, aadPrefix.length);
 
-    const encrypted = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-        plainBytes, aad, null, nonce, messageKey
-    );
-
+    const encrypted = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(plainBytes, aad, null, nonce, messageKey);
     const payload = new Uint8Array(nonce.length + timestamp.length + encrypted.length);
-    payload.set(nonce, 0); 
-    payload.set(timestamp, nonce.length);
-    payload.set(encrypted, nonce.length + timestamp.length);
+    payload.set(nonce, 0); payload.set(timestamp, nonce.length); payload.set(encrypted, nonce.length + timestamp.length);
 
     const sig = await signData(payload);
     let combined;
     if (sig) {
         combined = new Uint8Array(1 + 64 + payload.length);
-        combined[0] = 0x01; 
-        combined.set(sig, 1); 
-        combined.set(payload, 65);
+        combined[0] = 0x01; combined.set(sig, 1); combined.set(payload, 65);
     } else {
         combined = new Uint8Array(1 + payload.length);
-        combined[0] = 0x00; 
-        combined.set(payload, 1);
+        combined[0] = 0x00; combined.set(payload, 1);
     }
     return arrayBufferToBase64(combined);
 }
@@ -1573,134 +1529,71 @@ async function decryptPayload(ctBase64, aadPrefix, messageKey) {
     await sodium.ready;
     const combined = new Uint8Array(base64ToArrayBuffer(ctBase64));
     let nonce, timestamp, encrypted, signature = null, hasSig = false;
-    
-    const flag = combined[0];
-    const NONCE_LEN = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES;
-    const TS_LEN = 8;
+    const flag = combined[0], NONCE_LEN = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES, TS_LEN = 8;
     
     if (flag === 0x01) {
-        hasSig = true; 
-        signature = combined.slice(1, 65);
-        nonce = combined.slice(65, 65 + NONCE_LEN); 
-        timestamp = combined.slice(65 + NONCE_LEN, 65 + NONCE_LEN + TS_LEN); 
-        encrypted = combined.slice(65 + NONCE_LEN + TS_LEN);
+        hasSig = true; signature = combined.slice(1, 65);
+        nonce = combined.slice(65, 65 + NONCE_LEN); timestamp = combined.slice(65 + NONCE_LEN, 65 + NONCE_LEN + TS_LEN); encrypted = combined.slice(65 + NONCE_LEN + TS_LEN);
     } else if (flag === 0x00) {
-        nonce = combined.slice(1, 1 + NONCE_LEN); 
-        timestamp = combined.slice(1 + NONCE_LEN, 1 + NONCE_LEN + TS_LEN); 
-        encrypted = combined.slice(1 + NONCE_LEN + TS_LEN);
-    } else {
-        throw new Error("Неизвестный формат пакета");
-    }
+        nonce = combined.slice(1, 1 + NONCE_LEN); timestamp = combined.slice(1 + NONCE_LEN, 1 + NONCE_LEN + TS_LEN); encrypted = combined.slice(1 + NONCE_LEN + TS_LEN);
+    } else throw new Error("Неизвестный формат пакета");
 
     const aad = new Uint8Array(aadPrefix.length + timestamp.length);
     aad.set(aadPrefix, 0); aad.set(timestamp, aadPrefix.length);
 
     let decrypted;
-    try {
-        decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-            null, encrypted, aad, nonce, messageKey
-        );
-    } catch (e) {
-        throw new Error("Неверный MAC или ключ (ошибка расшифровки)");
-    }
+    try { decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(null, encrypted, aad, nonce, messageKey); } 
+    catch (e) { throw new Error("Неверный MAC или ключ"); }
 
     const timeCheck = validateMessageTime(extractTimestamp(timestamp));
-
     let sigResult = null;
     if (hasSig && signature) {
         const pv = new Uint8Array(nonce.length + timestamp.length + encrypted.length);
-        pv.set(nonce, 0); 
-        pv.set(timestamp, nonce.length); 
-        pv.set(encrypted, nonce.length + timestamp.length);
+        pv.set(nonce, 0); pv.set(timestamp, nonce.length); pv.set(encrypted, nonce.length + timestamp.length);
         sigResult = await verifySignature(pv, signature);
     }
-
     return { data: decrypted, hasSig, sigResult, timeCheck, isSigned: hasSig };
 }
 
-// =====================================================================
-// ГОЛОСОВЫЕ СООБЩЕНИЯ
-// =====================================================================
-let mediaRecorder = null;
-let audioChunks = [];
-let isVoiceRecording = false;
+let mediaRecorder = null, audioChunks = [], isVoiceRecording = false;
 
 async function toggleVoiceRecord() {
     const btn = document.getElementById('btnVoiceRecord');
-    
     if (isVoiceRecording) {
-        mediaRecorder.stop();
-        btn.textContent = '🎤';
-        btn.classList.remove('recording-active');
-        isVoiceRecording = false;
+        mediaRecorder.stop(); btn.textContent = '🎤'; btn.classList.remove('recording-active'); isVoiceRecording = false;
     } else {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-            audioChunks = [];
-            
-            mediaRecorder.ondataavailable = e => { 
-                if (e.data.size > 0) audioChunks.push(e.data); 
-            };
-            
+            mediaRecorder = new MediaRecorder(stream); audioChunks = [];
+            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
             mediaRecorder.onstop = () => {
                 const blob = new Blob(audioChunks, { type: 'audio/webm' });
-                const fileName = `Voice_${formatTime(new Date()).replace(':','-')}.webm`;
-                const file = new File([blob], fileName, { type: 'audio/webm' });
-                attachFile(file);
-                stream.getTracks().forEach(track => track.stop());
+                const file = new File([blob], `Voice_${formatTime(new Date()).replace(':','-')}.webm`, { type: 'audio/webm' });
+                attachFile(file); stream.getTracks().forEach(t => t.stop());
             };
-            
-            mediaRecorder.start();
-            isVoiceRecording = true;
-            btn.textContent = '⏹️';
-            btn.classList.add('recording-active');
-        } catch (e) {
-            showStatus('error', 'Доступ к микрофону запрещен или недоступен.');
-        }
+            mediaRecorder.start(); isVoiceRecording = true;
+            btn.textContent = '⏹️'; btn.classList.add('recording-active');
+        } catch (e) { showStatus('error', 'Доступ к микрофону запрещен'); }
     }
 }
 
-// =====================================================================
-// ЧАТ UI
-// =====================================================================
 function updateChatHeader() {
-    const el = document.getElementById('chatHeaderStatus');
-    const parts = [];
-    if (currentSymmetricKey) parts.push('🔒 XChaCha20');
-    else parts.push('⚠️ Ключ не установлен');
+    const el = document.getElementById('chatHeaderStatus'), parts = [];
+    if (isMlKemReady) parts.push('🧬 Hybrid Ratchet'); else parts.push('⚠️ Ключ не установлен');
     if (ed25519SigningEnabled) parts.push('✍️ Подпись');
     if (ed25519VerifyEnabled) parts.push('🔍 Проверка');
     el.textContent = parts.join(' | ');
 }
 
-function scrollChatBottom() {
-    const el = document.getElementById('chatMessages');
-    el.scrollTop = el.scrollHeight;
-}
-
-function clearEmptyState() {
-    const empty = document.querySelector('.chat-empty');
-    if (empty) empty.remove();
-}
-
+function scrollChatBottom() { const el = document.getElementById('chatMessages'); el.scrollTop = el.scrollHeight; }
+function clearEmptyState() { const empty = document.querySelector('.chat-empty'); if (empty) empty.remove(); }
 function updateChatEmptyState() {
     const container = document.getElementById('chatMessages');
     if (chatMessageCounter > 0) return;
-
-    let text = 'Установите XChaCha20-ключ на вкладке «Обмен ключами»,\nзатем переходите в чат';
-    if (isInitiatorRole === true) {
-        text = 'Напишите первое сообщение, чтобы начать диалог';
-    } else if (isInitiatorRole === false) {
-        text = 'Дождитесь, пока собеседник отправит первое сообщение';
-    }
-
-    container.innerHTML = `
-        <div class="chat-empty">
-            <div class="chat-empty-icon">🔐</div>
-            <div class="chat-empty-text">${text}</div>
-        </div>
-    `;
+    let text = 'Установите гибридный ключ на вкладке «Обмен ключами»';
+    if (isInitiatorRole === true) text = 'Напишите первое сообщение (Вы Инициатор)';
+    else if (isInitiatorRole === false) text = 'Дождитесь первого сообщения от инициатора';
+    container.innerHTML = `<div class="chat-empty"><div class="chat-empty-icon">🔐</div><div class="chat-empty-text">${text}</div></div>`;
 }
 
 function getMessagePreview(gId) {
@@ -1708,18 +1601,11 @@ function getMessagePreview(gId) {
     if (localId) {
         const el = document.getElementById('msg-' + localId);
         if (el) {
-            const textEl = el.querySelector('.msg-text');
-            if (textEl) {
-                const txt = textEl.textContent;
-                return txt.length > 60 ? txt.slice(0,60)+'…' : txt;
-            }
-            const fileEl = el.querySelector('.msg-file-name');
-            if (fileEl) return '📎 ' + fileEl.textContent;
+            const t = el.querySelector('.msg-text'); if (t) return t.textContent.length > 60 ? t.textContent.slice(0,60)+'…' : t.textContent;
+            const f = el.querySelector('.msg-file-name'); if (f) return '📎 ' + f.textContent;
         }
     }
-    const cached = replyInfoCache.get(gId);
-    if (cached) return cached.preview;
-    return '…';
+    const cached = replyInfoCache.get(gId); return cached ? cached.preview : '…';
 }
 
 function getMessageSender(gId) {
@@ -1728,56 +1614,42 @@ function getMessageSender(gId) {
         const el = document.getElementById('msg-' + localId);
         if (el) return el.classList.contains('msg-mine') ? 'Вы' : 'Собеседник';
     }
-    const cached = replyInfoCache.get(gId);
-    if (cached) return cached.sender;
-    return '';
+    const cached = replyInfoCache.get(gId); return cached ? cached.sender : '';
 }
 
 function registerMessageInCache(gId, side, text, fileName) {
     if (!gId) return;
     const sender = side === 'mine' ? 'Вы' : 'Собеседник';
-    let preview;
-    if (text) {
-        preview = text.length > 60 ? text.slice(0,60)+'…' : text;
-    } else if (fileName) {
-        preview = '📎 ' + fileName;
-    } else {
-        preview = '…';
-    }
+    let preview = '…';
+    if (text) preview = text.length > 60 ? text.slice(0,60)+'…' : text;
+    else if (fileName) preview = '📎 ' + fileName;
     replyInfoCache.set(gId, { sender, preview, exists: true });
 }
 
 function setReplyTo(gId) {
     replyToGlobalId = gId;
-    const bar = document.getElementById('chatReplyBar');
-    const sender = getMessageSender(gId);
-    const preview = getMessagePreview(gId);
-    document.getElementById('replyBarSender').textContent = sender;
-    document.getElementById('replyBarText').textContent = preview;
-    bar.classList.add('show');
+    document.getElementById('replyBarSender').textContent = getMessageSender(gId);
+    document.getElementById('replyBarText').textContent = getMessagePreview(gId);
+    document.getElementById('chatReplyBar').classList.add('show'); 
     document.getElementById('chatInput').focus();
 }
 
-function cancelReply() {
-    replyToGlobalId = null;
-    document.getElementById('chatReplyBar').classList.remove('show');
-}
+function cancelReply() { replyToGlobalId = null; document.getElementById('chatReplyBar').classList.remove('show'); }
 
 function scrollToMessage(gId) {
     const localMsgId = globalToLocalMap.get(gId);
     const el = localMsgId ? document.getElementById('msg-' + localMsgId) : null;
-    if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.style.outline = '2px solid var(--primary-color)';
-        setTimeout(() => { el.style.outline = ''; }, 1500);
-    } else {
-        showStatus('info', 'Сообщение отсутствует в локальном чате');
+    if (el) { 
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' }); 
+        el.style.outline = '2px solid var(--primary-color)'; 
+        setTimeout(() => el.style.outline='', 1500); 
     }
+    else showStatus('info', 'Сообщение отсутствует в локальном чате');
 }
 
 function addMessageBubble(opts) {
-    clearEmptyState();
-    const msgId = ++chatMessageCounter; // local DOM ID
+    clearEmptyState(); 
+    const msgId = ++chatMessageCounter; 
     const container = document.getElementById('chatMessages');
 
     if (opts.globalId) {
@@ -1785,194 +1657,85 @@ function addMessageBubble(opts) {
         registerMessageInCache(opts.globalId, opts.side, opts.text, opts.fileInfo?.name);
     }
 
-    const bubble = document.createElement('div');
-    bubble.className = 'msg-bubble msg-' + opts.side;
+    const bubble = document.createElement('div'); 
+    bubble.className = 'msg-bubble msg-' + opts.side; 
     bubble.id = 'msg-' + msgId;
-    bubble.dataset.msgId = msgId;
-
-    let html = '';
-
-    html += `<div class="msg-sender">${opts.side==='mine' ? 'Вы' : 'Собеседник'}</div>`;
+    
+    let html = `<div class="msg-sender">${opts.side==='mine' ? 'Вы' : 'Собеседник'}</div>`;
 
     if (opts.replyTo) {
         const replyGId = opts.replyTo;
         const replySender = opts.replySender || getMessageSender(replyGId) || 'Собеседник';
         const replyPreview = opts.replyPreview || getMessagePreview(replyGId) || '…';
         
-        if (!replyInfoCache.has(replyGId)) {
-            replyInfoCache.set(replyGId, { sender: replySender, preview: replyPreview, exists: false });
-        }
-        
+        if (!replyInfoCache.has(replyGId)) replyInfoCache.set(replyGId, { sender: replySender, preview: replyPreview, exists: false });
         const localReplyId = globalToLocalMap.get(replyGId);
         const elExists = localReplyId && document.getElementById('msg-' + localReplyId) !== null;
         
-        html += `<div class="msg-reply-preview" onclick="scrollToMessage('${replyGId}')" style="${elExists ? '' : 'opacity: 0.6;'}">
-            <strong>${escapeHtml(replySender)}:</strong> ${escapeHtml(replyPreview)}
-        </div>`;
+        html += `<div class="msg-reply-preview" onclick="scrollToMessage('${replyGId}')" style="${elExists?'':'opacity:0.6;'}"><strong>${escapeHtml(replySender)}:</strong> ${escapeHtml(replyPreview)}</div>`;
     }
 
-    if (opts.fileInfo) {
-        const icon = getFileIconEmoji(opts.fileInfo.type);
-        html += `<div class="msg-file-info">
-            <div class="msg-file-icon">${icon}</div>
-            <div class="msg-file-details">
-                <div class="msg-file-name">${escapeHtml(opts.fileInfo.name)}</div>
-                <div class="msg-file-size">${formatFileSize(opts.fileInfo.size)}</div>
-            </div>
-        </div>`;
-    }
+    if (opts.fileInfo) html += `<div class="msg-file-info"><div class="msg-file-icon">${getFileIconEmoji(opts.fileInfo.type)}</div><div class="msg-file-details"><div class="msg-file-name">${escapeHtml(opts.fileInfo.name)}</div><div class="msg-file-size">${formatFileSize(opts.fileInfo.size)}</div></div></div>`;
 
     if (opts.mediaData) {
-        const mediaType = getVerifiedMediaType(opts.mediaData);
-        let category = mediaType ? SAFE_MEDIA_TYPES[mediaType] : null; 
-        if (category && !containsScriptContent(opts.mediaData)) {
-            if (category === 'video' && opts.fileInfo && opts.fileInfo.name.includes('Voice_')) {
-                category = 'audio';
-            }
-            const blob = new Blob([opts.mediaData], { type: mediaType });
-            const url = URL.createObjectURL(blob);
-            mediaObjectUrls.push(url);
+        const mType = getVerifiedMediaType(opts.mediaData); let cat = mType ? SAFE_MEDIA_TYPES[mType] : null;
+        if (cat && !containsScriptContent(opts.mediaData)) {
+            if (cat === 'video' && opts.fileInfo?.name.includes('Voice_')) cat = 'audio';
+            const url = URL.createObjectURL(new Blob([opts.mediaData], { type: mType })); mediaObjectUrls.push(url);
             html += '<div class="msg-media">';
-            if (category === 'image') {
-                html += `<img src="${url}" alt="Изображение" onclick="window.open('${url}','_blank')">`;
-            } else if (category === 'video') {
-                html += `<video src="${url}" controls controlsList="nodownload" style="max-width:100%"></video>`;
-            } else if (category === 'audio') {
-                html += `<div style="display:flex; align-items:center; gap:8px;">
-                    <audio src="${url}" controls controlsList="nodownload" style="flex:1; min-width:150px;"></audio>
-                    <select class="audio-speed-select" onchange="this.previousElementSibling.playbackRate = parseFloat(this.value)" title="Скорость">
-                        <option value="0.5">0.5x</option>
-                        <option value="1" selected>1x</option>
-                        <option value="1.5">1.5x</option>
-                        <option value="2">2x</option>
-                    </select>
-                </div>`;
-            }
+            if (cat==='image') html += `<img src="${url}" onclick="window.open('${url}','_blank')">`;
+            else if (cat==='video') html += `<video src="${url}" controls controlsList="nodownload"></video>`;
+            else if (cat==='audio') html += `<div style="display:flex; gap:8px;"><audio src="${url}" controls controlsList="nodownload" style="flex:1;"></audio><select class="audio-speed-select" onchange="this.previousElementSibling.playbackRate=parseFloat(this.value)"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="1.5">1.5x</option><option value="2">2x</option></select></div>`;
             html += '</div>';
         }
     }
 
-    if (opts.text) {
-        html += `<div class="msg-text">${escapeHtml(opts.text)}</div>`;
-    }
+    if (opts.text) html += `<div class="msg-text">${escapeHtml(opts.text)}</div>`;
+    if (opts.sigResult) html += `<div class="msg-signature ${opts.sigResult.verified?'msg-sig-ok':(opts.sigResult.reason==='no_key'?'msg-sig-warn':'msg-sig-fail')}">${escapeHtml(opts.sigResult.message)}</div>`;
+    else if (opts.isSigned===false && opts.side==='friend') html += `<div class="msg-signature msg-sig-warn">ℹ️ Без подписи</div>`;
+    if (opts.timeCheck?.warning) html += `<div class="msg-signature msg-sig-warn">${escapeHtml(opts.timeCheck.message)}</div>`;
+    html += `<div class="msg-meta"><span>${formatTime(new Date())}</span></div><div class="msg-actions">`;
 
-    if (opts.sigResult) {
-        const cls = opts.sigResult.verified ? 'msg-sig-ok' : (opts.sigResult.reason==='no_key' ? 'msg-sig-warn' : 'msg-sig-fail');
-        html += `<div class="msg-signature ${cls}">${escapeHtml(opts.sigResult.message)}</div>`;
-    } else if (opts.isSigned === false && opts.side === 'friend') {
-        html += `<div class="msg-signature msg-sig-warn">ℹ️ Без подписи</div>`;
-    }
-
-    if (opts.timeCheck && opts.timeCheck.warning) {
-        html += `<div class="msg-signature msg-sig-warn">${escapeHtml(opts.timeCheck.message)}</div>`;
-    }
-
-    html += `<div class="msg-meta"><span>${formatTime(new Date())}</span></div>`;
-
-    html += '<div class="msg-actions">';
     if (opts.cipherText) {
-        if (!opts.fileInfo) {
-            html += `<button class="msg-action-btn" onclick="toggleCipher(${msgId})">🔤 Шифротекст</button>`;
-            html += `<button class="msg-action-btn" onclick="copyCipher(${msgId})">📋 Копировать</button>`;
-        }
-        if (opts.side === 'mine' && opts.fileInfo) {
-            html += `<button class="msg-action-btn" onclick="downloadEncryptedFile(${msgId})">💾 Скачать</button>`;
-        }
+        if (!opts.fileInfo) html += `<button class="msg-action-btn" onclick="toggleCipher(${msgId})">🔤 Код</button><button class="msg-action-btn" onclick="copyCipher(${msgId})">📋 Копировать</button>`;
+        if (opts.side==='mine' && opts.fileInfo) html += `<button class="msg-action-btn" onclick="downloadEncryptedFile(${msgId})">💾 Скачать</button>`;
     }
-    // Кнопка Reply использует глобальный ID
+    
     html += `<button class="msg-action-btn" onclick="setReplyTo('${opts.globalId || msgId}')">↩️ Ответить</button>`;
-
-    if (opts.fileInfo && opts.fileInfo.downloadData) {
-        html += `<button class="msg-action-btn" onclick="downloadFileFromMsg(${msgId})" data-download='pending'>💾 Скачать</button>`;
-    }
+    
+    if (opts.fileInfo?.downloadData) html += `<button class="msg-action-btn" onclick="downloadFileFromMsg(${msgId})">💾 Скачать</button>`;
     html += '</div>';
-
-    if (opts.cipherText && !opts.fileInfo) {
-        html += `<div class="msg-cipher" id="cipher-${msgId}">${escapeHtml(opts.cipherText)}</div>`;
-    }
+    
+    if (opts.cipherText && !opts.fileInfo) html += `<div class="msg-cipher" id="cipher-${msgId}">${escapeHtml(opts.cipherText)}</div>`;
 
     bubble.innerHTML = html;
+    if (opts.fileInfo?.downloadData) { bubble._downloadData = opts.fileInfo.downloadData; bubble._downloadName = opts.fileInfo.name; bubble._downloadType = opts.fileInfo.type; }
+    if (opts.cipherText) { bubble._cipherText = opts.cipherText; bubble._encryptedFileName = 'encrypted.enc'; }
 
-    if (opts.fileInfo && opts.fileInfo.downloadData) {
-        bubble._downloadData = opts.fileInfo.downloadData;
-        bubble._downloadName = opts.fileInfo.name;
-        bubble._downloadType = opts.fileInfo.type;
-    }
-    if (opts.cipherText) {
-        bubble._cipherText = opts.cipherText;
-        bubble._encryptedFileName = 'encrypted.enc';
-    }
-
-    container.appendChild(bubble);
-    scrollChatBottom();
-    return msgId;
+    container.appendChild(bubble); scrollChatBottom(); return msgId;
 }
 
-function escapeHtml(str) {
-    const d = document.createElement('div');
-    d.textContent = str;
-    return d.innerHTML;
+function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+function toggleCipher(id) { document.getElementById('cipher-'+id)?.classList.toggle('show'); }
+async function copyCipher(id) { const el = document.getElementById('cipher-'+id); if(el) { await navigator.clipboard.writeText(el.textContent); showStatus('success','Скопировано!'); } }
+function downloadEncryptedFile(id) {
+    const el = document.getElementById('msg-'+id); if (!el||!el._cipherText) return;
+    const url = URL.createObjectURL(new Blob([el._cipherText], { type:'application/octet-stream' }));
+    const a = document.createElement('a'); a.href = url; a.download = el._encryptedFileName; a.click(); URL.revokeObjectURL(url);
 }
-
-function toggleCipher(msgId) {
-    const el = document.getElementById('cipher-' + msgId);
-    if (el) el.classList.toggle('show');
+function downloadFileFromMsg(id) {
+    const el = document.getElementById('msg-'+id); if (!el||!el._downloadData) return;
+    const url = URL.createObjectURL(new Blob([el._downloadData], { type:el._downloadType }));
+    const a = document.createElement('a'); a.href = url; a.download = el._downloadName; a.click(); URL.revokeObjectURL(url);
 }
+function clearChat() { document.getElementById('chatMessages').innerHTML=''; chatMessageCounter=0; globalToLocalMap.clear(); replyInfoCache.clear(); cancelReply(); clearAttachedFile(); updateChatEmptyState(); }
 
-async function copyCipher(msgId) {
-    const el = document.getElementById('cipher-' + msgId);
-    if (el) {
-        try {
-            await navigator.clipboard.writeText(el.textContent);
-            showStatus('success', 'Шифротекст скопирован!');
-        } catch(e) { showStatus('error', 'Ошибка копирования'); }
-    }
-}
-
-function downloadEncryptedFile(msgId) {
-    const el = document.getElementById('msg-' + msgId);
-    if (!el || !el._cipherText) return;
-    
-    const blob = new Blob([el._cipherText], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = el._encryptedFileName || 'encrypted.enc';
-    a.click();
-    URL.revokeObjectURL(url);
-    showStatus('success', 'Зашифрованный файл сохранён');
-}
-
-function downloadFileFromMsg(msgId) {
-    const el = document.getElementById('msg-' + msgId);
-    if (!el || !el._downloadData) return;
-    const blob = new Blob([el._downloadData], { type: el._downloadType || 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = el._downloadName || 'file'; a.click();
-    URL.revokeObjectURL(url);
-}
-
-function clearChat() {
-    const container = document.getElementById('chatMessages');
-    chatMessageCounter = 0;
-    replyInfoCache.clear();
-    globalToLocalMap.clear();
-    cancelReply();
-    clearAttachedFile();
-    updateChatEmptyState();
-}
-
-// =====================================================================
-// ЧАТ: Зашифровать
-// =====================================================================
 async function chatEncrypt() {
-    if (!currentSymmetricKey) { showStatus('error','Сначала установите XChaCha20-ключ'); return; }
-
-    const input = document.getElementById('chatInput');
-    const text = input.value.trim();
+    if (!isMlKemReady) { showStatus('error','Сначала завершите установку гибридного ключа'); return; }
+    const input = document.getElementById('chatInput'); 
+    const text = input.value.trim(); 
     const hasFile = !!chatAttachedFile;
-
+    
     if (!text && !hasFile) { showStatus('error','Введите сообщение или прикрепите файл'); return; }
 
     try {
@@ -2002,11 +1765,7 @@ async function chatEncrypt() {
                 globalId: msgGlobalId,
                 text: text || null,
                 cipherText: envelope,
-                fileInfo: { 
-                    name: chatAttachedFile.file.name + ' → encrypted.enc', 
-                    size: chatAttachedFile.file.size, 
-                    type: chatAttachedFile.file.type 
-                },
+                fileInfo: { name: chatAttachedFile.file.name + ' → encrypted.enc', size: chatAttachedFile.file.size, type: chatAttachedFile.file.type },
                 mediaData: chatAttachedFile.data,
                 replyTo: replyToGlobalId,
                 isSigned: ed25519SigningEnabled
@@ -2028,65 +1787,37 @@ async function chatEncrypt() {
                 isSigned: ed25519SigningEnabled
             });
         }
-
-        input.value = '';
-        autoResizeInput();
-        cancelReply();
-        showStatus('success', ed25519SigningEnabled ? '✍️ Зашифровано и подписано!' : '🔒 Зашифровано!');
-    } catch(e) {
-        showStatus('error','Ошибка шифрования: ' + e.message);
-    }
+        input.value = ''; autoResizeInput(); cancelReply();
+    } catch(e) { showStatus('error','Ошибка шифрования: ' + e.message); }
 }
 
-// =====================================================================
-// ЧАТ: Расшифровать
-// =====================================================================
 async function chatDecrypt() {
-    if (!currentSymmetricKey) { showStatus('error','Сначала установите XChaCha20-ключ'); return; }
-
-    const input = document.getElementById('chatInput');
-    let rawText = input.value.trim();
-
-    if (!rawText && chatAttachedFile) {
-        try {
-            rawText = new TextDecoder().decode(chatAttachedFile.data).trim();
-        } catch(e) {
-            rawText = arrayBufferToBase64(chatAttachedFile.data);
-        }
-        clearAttachedFile();
-    }
-
-    if (!rawText) { showStatus('error','Вставьте зашифрованное сообщение'); return; }
+    if (!isMlKemReady) { showStatus('error','Сначала завершите установку гибридного ключа'); return; }
+    const input = document.getElementById('chatInput'); let rawText = input.value.trim();
+    if (!rawText && chatAttachedFile) { try { rawText = new TextDecoder().decode(chatAttachedFile.data).trim(); } catch(e) { rawText = arrayBufferToBase64(chatAttachedFile.data); } clearAttachedFile(); }
+    if (!rawText) { showStatus('error','Вставьте шифротекст'); return; }
 
     try {
         const env = parseEnvelope(rawText);
         const aadPrefix = (env.type === 'file') ? AAD_FILE : AAD_MESSAGE;
+        if (!env.rh) throw new Error("Нет заголовка Double Ratchet");
 
-        if (!env.rh) throw new Error("Сообщение не содержит заголовка Double Ratchet.");
-
-        const ratchetResult = Ratchet.ratchetDecryptTentative(env.rh);
-        const result = await decryptPayload(env.ct, aadPrefix, ratchetResult.mk);
-        Ratchet.commitState(ratchetResult.tentativeState, ratchetResult.skipKeyToRemove);
+        const rRes = Ratchet.ratchetDecryptTentative(env.rh);
+        const res = await decryptPayload(env.ct, aadPrefix, rRes.mk);
+        Ratchet.commitState(rRes.tentativeState, rRes.skipKeyToRemove);
 
         let metadata, binaryData;
         
         if (env.v >= 4) {
-            const unpacked = unpackPayload(result.data);
+            const unpacked = unpackPayload(res.data);
             metadata = unpacked.metadata;
             binaryData = unpacked.binaryData;
         } else {
             if (env.type === 'file') {
-                binaryData = result.data;
-                metadata = {
-                    gId: crypto.randomUUID(), 
-                    fName: env.fileName || 'decrypted_file',
-                    fType: 'application/octet-stream'
-                };
+                binaryData = res.data;
+                metadata = { gId: crypto.randomUUID(), fName: env.fileName || 'decrypted_file', fType: 'application/octet-stream' };
             } else {
-                metadata = {
-                    gId: crypto.randomUUID(),
-                    txt: td.decode(result.data)
-                };
+                metadata = { gId: crypto.randomUUID(), txt: td.decode(res.data) };
             }
             if (env.reply) {
                 metadata.rId = env.reply.id; 
@@ -2096,25 +1827,19 @@ async function chatDecrypt() {
         }
 
         if (env.type === 'file') {
-            const fileType = 'application/octet-stream';
             addMessageBubble({
                 side: 'friend',
                 globalId: metadata.gId,
                 text: metadata.txt || null, 
                 cipherText: rawText,
-                fileInfo: {
-                    name: metadata.fName,
-                    size: binaryData.byteLength,
-                    type: fileType,
-                    downloadData: binaryData
-                },
+                fileInfo: { name: metadata.fName, size: binaryData.byteLength, type: 'application/octet-stream', downloadData: binaryData },
                 mediaData: binaryData,
-                sigResult: result.hasSig ? result.sigResult : null,
-                timeCheck: result.timeCheck,
+                sigResult: res.hasSig ? res.sigResult : null,
+                timeCheck: res.timeCheck,
                 replyTo: metadata.rId,
                 replyPreview: metadata.rPrev,
                 replySender: metadata.rSender,
-                isSigned: result.hasSig
+                isSigned: res.hasSig
             });
         } else {
             addMessageBubble({
@@ -2122,25 +1847,18 @@ async function chatDecrypt() {
                 globalId: metadata.gId,
                 text: metadata.txt,
                 cipherText: rawText,
-                sigResult: result.hasSig ? result.sigResult : null,
-                timeCheck: result.timeCheck,
+                sigResult: res.hasSig ? res.sigResult : null,
+                timeCheck: res.timeCheck,
                 replyTo: metadata.rId,
                 replyPreview: metadata.rPrev,
                 replySender: metadata.rSender,
-                isSigned: result.hasSig
+                isSigned: res.hasSig
             });
         }
-
-        input.value = '';
-        autoResizeInput();
-        cancelReply();
-    } catch(e) {
-        showStatus('error','Ошибка расшифровки: ' + e.message);
-    }
+        input.value = ''; autoResizeInput(); cancelReply();
+    } catch(e) { showStatus('error','Ошибка расшифровки: ' + e.message); }
 }
-// =====================================================================
-// ЧАТ: Файлы
-// =====================================================================
+
 function attachFile(file) {
     readFileAsArrayBuffer(file).then(data => {
         chatAttachedFile = { file, data };
@@ -2149,171 +1867,60 @@ function attachFile(file) {
         document.getElementById('chatFilePreview').classList.add('show');
     });
 }
+function clearAttachedFile() { chatAttachedFile = null; document.getElementById('chatFilePreview').classList.remove('show'); document.getElementById('chatFileInput').value = ''; }
+function autoResizeInput() { const el = document.getElementById('chatInput'); el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
 
-function clearAttachedFile() {
-    chatAttachedFile = null;
-    document.getElementById('chatFilePreview').classList.remove('show');
-    document.getElementById('chatFileInput').value = '';
-}
-
-// =====================================================================
-// АВТО-РАЗМЕР ПОЛЯ ВВОДА
-// =====================================================================
-function autoResizeInput() {
-    const el = document.getElementById('chatInput');
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-}
-
-// =====================================================================
-// УНИЧТОЖЕНИЕ ДАННЫХ
-// =====================================================================
 function destroyAllData() {
-    if (!confirm('⚠️ Все ключи и данные будут уничтожены!')) return;
-
-    secureZero(currentSymmetricKey);
-    secureZero(derivedAesKeyRaw);
-
-    if (myKxKeyPair) {
-        secureZero(myKxKeyPair.privateKey);
-    }
-
+    if (!confirm('⚠️ Все ключи будут уничтожены!')) return;
+    secureZero(currentSymmetricKey); secureZero(derivedAesKeyRaw);
+    if (myKxKeyPair) secureZero(myKxKeyPair.privateKey);
     if (Ratchet.state.RK) secureZero(Ratchet.state.RK);
-    if (Ratchet.state.CKs) secureZero(Ratchet.state.CKs);
-    if (Ratchet.state.CKr) secureZero(Ratchet.state.CKr);
+    if (Ratchet.state.CKs) secureZero(Ratchet.state.CKs); if (Ratchet.state.CKr) secureZero(Ratchet.state.CKr);
+    if (Ratchet.state.DHs?.privateKey) secureZero(Ratchet.state.DHs.privateKey);
+    for (const k in Ratchet.state.skipped) secureZero(Ratchet.state.skipped[k]);
 
-    if (Ratchet.state.DHs?.privateKey) {
-        secureZero(Ratchet.state.DHs.privateKey);
-    }
+    currentSymmetricKey=null; myKxKeyPair=null; myMlKemKeyPair=null; myCombinedPublicKeyBuf=null;
+    pqcSharedSecret=null; mlKemCiphertext=null; isMlKemReady=false; tempSClassic=null; tempFriendX25519Pk=null;
+    myEd25519PrivateKey=null; myEd25519PublicKeyRaw=null; secureZero(myEd25519PrivateKeyPkcs8); myEd25519PrivateKeyPkcs8=null;
+    friendEd25519PublicKeyRaw=null; ed25519SigningEnabled=false; ed25519VerifyEnabled=false;
+    chatAttachedFile=null; replyToGlobalId=null; isInitiatorRole=null;
+    Ratchet.state = { RK:null, CKs:null, CKr:null, DHs:null, DHr:null, Ns:0, Nr:0, PN:0, skipped:{} }; 
+    globalToLocalMap.clear(); replyInfoCache.clear();
+    mediaObjectUrls.forEach(u=>URL.revokeObjectURL(u)); mediaObjectUrls=[];
 
-    for (const k in Ratchet.state.skipped) {
-        secureZero(Ratchet.state.skipped[k]);
-    }
-
-    currentSymmetricKey = null;
-    myKxKeyPair = null;
-    derivedAesKeyRaw = null;
-    myPublicKeyBuffer = null;
-    myEcdhFingerprintStr = '';
-    myEd25519PrivateKey = null;
-    myEd25519PublicKeyRaw = null;
-    secureZero(myEd25519PrivateKeyPkcs8);
-    myEd25519PrivateKeyPkcs8 = null;
-    friendEd25519PublicKey = null;
-    friendEd25519PublicKeyRaw = null;
-    ed25519SigningEnabled = false;
-    ed25519VerifyEnabled = false;
-    chatAttachedFile = null;
-    replyToGlobalId = null;
-    isInitiatorRole = null;
-    Ratchet.state = {
-        RK: null,
-        CKs: null,
-        CKr: null,
-        DHs: null,
-        DHr: null,
-        Ns: 0,
-        Nr: 0,
-        PN: 0,
-        skipped: {}
-    };
-    replyInfoCache.clear();
-    globalToLocalMap.clear();
-
-    mediaObjectUrls.forEach(u => URL.revokeObjectURL(u));
-    mediaObjectUrls = [];
-
-    document.querySelectorAll('textarea, input[type="text"], input[type="password"]').forEach(el => el.value = '');
-
-    document.getElementById('myEcdhFingerprint').textContent = '—';
-    document.getElementById('friendEcdhFingerprint').textContent = '—';
-    document.getElementById('friendEcdhVerification').style.display = 'none';
-    document.getElementById('ecdhFingerprintMatch').style.display = 'none';
-    document.getElementById('ecdhFingerprintMismatch').style.display = 'none';
-
-    document.getElementById('myEd25519Fingerprint').textContent = '—';
-    document.getElementById('friendEd25519Fingerprint').textContent = '—';
-    document.getElementById('ed25519KeysGenerated').style.display = 'none';
-    document.getElementById('friendEd25519Verification').style.display = 'none';
-    document.getElementById('ed25519FingerprintMatch').style.display = 'none';
-    document.getElementById('ed25519FingerprintMismatch').style.display = 'none';
-    document.getElementById('ed25519MyStatus').className = 'status info';
-    document.getElementById('ed25519MyStatus').textContent = 'Ключи подписи не сгенерированы';
-    document.getElementById('ed25519FriendStatus').className = 'status info';
-    document.getElementById('ed25519FriendStatus').textContent = 'Ключ подписи собеседника не установлен';
-
-    clearChat();
-    clearAttachedFile();
-    cancelReply();
-    updateChatHeader();
-
-    showStatus('success', '🔥 Все данные уничтожены!');
+    document.querySelectorAll('textarea, input').forEach(el=>el.value='');
+    document.getElementById('myHybridFingerprint').textContent = '—';
+    document.getElementById('friendHybridFingerprint').textContent = '—';
+    document.getElementById('friendHybridVerification').style.display = 'none';
+    document.getElementById('ciphertextSection').style.display = 'none';
+    
+    document.getElementById('myEd25519Fingerprint').textContent = '—'; document.getElementById('friendEd25519Fingerprint').textContent = '—';
+    document.getElementById('ed25519KeysGenerated').style.display = 'none'; document.getElementById('friendEd25519Verification').style.display = 'none';
+    
+    clearChat(); showStatus('success', '🔥 Данные уничтожены!');
 }
 
-// =====================================================================
-// ИНИЦИАЛИЗАЦИЯ
-// =====================================================================
 document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        if (typeof sodium !== 'undefined') {
-            await sodium.ready;
-            console.log("Libsodium успешно инициализирована!");
-        } else {
-            showStatus('error', 'Ошибка: файл sodium.js не подключен или не найден рядом с HTML');
-            return;
-        }
-    } catch (err) {
-        showStatus('error', 'Ошибка крипто-ядра: ' + err.message);
-        return;
-    }
+    try { if (typeof sodium !== 'undefined') await sodium.ready; else { showStatus('error', 'libsodium не найден'); return; } } catch (e) { return; }
     loadTheme();
-
-    document.getElementById('verifyEcdhFingerprintBtn').addEventListener('click', verifyEcdhFingerprint);
-    document.getElementById('generateEd25519Keys').addEventListener('click', generateEd25519KeyPair);
-    document.getElementById('importEd25519PrivateKey').addEventListener('click', importEd25519PrivateKey);
-    document.getElementById('importFriendEd25519Key').addEventListener('click', importFriendEd25519Key);
-
-    document.getElementById('chatFileInput').addEventListener('change', (e) => {
-        if (e.target.files[0]) attachFile(e.target.files[0]);
-    });
-
-    const chatInput = document.getElementById('chatInput');
-    chatInput.addEventListener('input', autoResizeInput);
-
-    chatInput.addEventListener('keydown', (e) => {
+    document.getElementById('chatFileInput').addEventListener('change', e => { if(e.target.files[0]) attachFile(e.target.files[0]); });
+    const ci = document.getElementById('chatInput'); ci.addEventListener('input', autoResizeInput);
+    
+    ci.addEventListener('keydown', e => {
         if (e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) {
-            e.preventDefault();
-            const val = chatInput.value.trim();
-            if (val && looksLikeCiphertext(val)) {
-                chatDecrypt();
-            } else {
-                chatEncrypt();
-            }
+            e.preventDefault(); const val = ci.value.trim(); if(val && looksLikeCiphertext(val)) chatDecrypt(); else chatEncrypt();
         }
     });
-
-    chatInput.addEventListener('paste', async (e) => {
-        const items = e.clipboardData?.items;
-        if (!items) return;
-        for (let item of items) {
-            if (item.kind === 'file') {
-                e.preventDefault();
-                const file = item.getAsFile();
-                if (file) attachFile(file);
-                return;
-            }
-        }
+    
+    ci.addEventListener('paste', async e => {
+        if(!e.clipboardData?.items) return;
+        for (let item of e.clipboardData.items) { if(item.kind === 'file') { e.preventDefault(); const file = item.getAsFile(); if (file) attachFile(file); return; } }
     });
-
-    const chatMessages = document.getElementById('chatMessages');
-    chatMessages.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
-    chatMessages.addEventListener('drop', (e) => {
-        e.preventDefault();
-        if (e.dataTransfer.files.length) attachFile(e.dataTransfer.files[0]);
-    });
-
-    chatInput.addEventListener('dragover', (e) => { e.preventDefault(); });
-    chatInput.addEventListener('drop', (e) => {
+    
+    document.getElementById('chatMessages').addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+    document.getElementById('chatMessages').addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer.files.length) attachFile(e.dataTransfer.files[0]); });
+    ci.addEventListener('dragover', (e) => { e.preventDefault(); });
+    ci.addEventListener('drop', (e) => {
         e.preventDefault();
         if (e.dataTransfer.files.length) attachFile(e.dataTransfer.files[0]);
     });
@@ -2321,43 +1928,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateChatHeader();
 });
 
-// [ИСПРАВЛЕНО] Эвристика: выглядит ли текст как шифротекст
 function looksLikeCiphertext(text) {
-    // Удаляем любые пробельные символы перед валидацией, чтобы избежать ложных срабатываний
     const cleaned = text.replace(/\s+/g, '');
     if (cleaned.length < 40) return false;
-    // Проверяем, что строка представляет собой чистый Base64
     return /^[A-Za-z0-9+/]+={0,2}$/.test(cleaned);
 }
 
-window.addEventListener('beforeunload', () => {
-    mediaObjectUrls.forEach(u => URL.revokeObjectURL(u));
-});
+window.addEventListener('beforeunload', () => mediaObjectUrls.forEach(u => URL.revokeObjectURL(u)));
 
-document.getElementById('exportPrivateKeyBtn')
-?.addEventListener('click', async () => {
-
-    if (!myEd25519PrivateKeyPkcs8) {
-        showStatus('error', 'Приватный ключ отсутствует');
-        return;
-    }
-
-    const exported = arrayBufferToBase64(
-        myEd25519PrivateKeyPkcs8
-    );
-
-    await navigator.clipboard.writeText(exported);
-
-    showStatus(
-        'success',
-        'Ключ скопирован на 30 секунд'
-    );
-
-    setTimeout(async () => {
-        try {
-            await navigator.clipboard.writeText('');
-        } catch {}
-    }, 30000);
+document.getElementById('exportPrivateKeyBtn')?.addEventListener('click', async () => {
+    if (!myEd25519PrivateKeyPkcs8) { showStatus('error', 'Приватный ключ отсутствует'); return; }
+    await navigator.clipboard.writeText(arrayBufferToBase64(myEd25519PrivateKeyPkcs8)); 
+    showStatus('success','Ключ скопирован на 30 секунд');
+    setTimeout(async () => { try { await navigator.clipboard.writeText(''); } catch {} }, 30000);
 });
 </script>
 </body>
