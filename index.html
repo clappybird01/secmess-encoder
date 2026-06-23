@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' blob:; media-src blob:; object-src 'none'; frame-src 'none'; connect-src 'self' https://esm.sh; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval' https://esm.sh;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' blob:; media-src blob:; object-src 'none'; frame-src 'none'; connect-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval';">
     <title>Secure Messenger (Hybrid PQC)</title>
     <style>
         :root {
@@ -571,6 +571,7 @@
 
     </style>
     <script src="sodium.js"></script>
+    <script src="noble-pqc.js"></script>
 </head>
 <body>
 
@@ -1126,11 +1127,12 @@ function getFileIconEmoji(type) {
 // =====================================================================
 let noblePqModule = null;
 async function getNobleMlKem() {
-    if (noblePqModule) return noblePqModule;
-    try {
-        noblePqModule = await import('https://esm.sh/@noble/post-quantum@0.5.4/ml-kem.js');
-        return noblePqModule;
-    } catch (e) { throw new Error('Не удалось загрузить @noble/post-quantum: ' + e.message); }
+    // Библиотека уже загружена локально через тег <script>
+    // и записана нами в window.noblePqc в файле entry.js
+    if (window.noblePqc) {
+        return window.noblePqc;
+    }
+    throw new Error('Не удалось найти локальный модуль @noble/post-quantum. Проверьте подключение noble-pqc.js в index.html');
 }
 
 // =====================================================================
