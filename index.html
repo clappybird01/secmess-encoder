@@ -738,7 +738,8 @@
         <div class="row">
             <div class="card">
                 <h3>🔑 Мои ключи подписи</h3>
-                <button id="generateEd25519Keys">Сгенерировать ключи Ed25519</button>
+                <!-- ИСПРАВЛЕНИЕ: ДОБАВЛЕН onclick -->
+                <button id="generateEd25519Keys" onclick="generateEd25519KeyPair()">Сгенерировать ключи Ed25519</button>
 
                 <div class="verification-section" id="ed25519KeysGenerated" style="display: none;">
                     <label>Мой публичный ключ подписи (отправьте собеседнику):</label>
@@ -765,7 +766,8 @@
                             <button class="action-btn" onclick="clearField('ed25519PrivateKeyImport')" title="Очистить">🗑️</button>
                         </div>
                     </div>
-                    <button id="importEd25519PrivateKey">Импортировать</button>
+                    <!-- ИСПРАВЛЕНИЕ: ДОБАВЛЕН onclick -->
+                    <button id="importEd25519PrivateKey" onclick="importEd25519PrivateKey()">Импортировать</button>
                 </div>
 
                 <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border-color);">
@@ -790,7 +792,8 @@
                         <button class="action-btn" onclick="clearField('friendEd25519PublicKey')" title="Очистить">🗑️</button>
                     </div>
                 </div>
-                <button id="importFriendEd25519Key">Установить ключ собеседника</button>
+                <!-- ИСПРАВЛЕНИЕ: ДОБАВЛЕН onclick -->
+                <button id="importFriendEd25519Key" onclick="importFriendEd25519Key()">Установить ключ собеседника</button>
 
                 <div class="comparison-section" id="friendEd25519Verification" style="display: none;">
                     <h4>🔍 Сверка отпечатков</h4>
@@ -1593,8 +1596,8 @@ function updateChatEmptyState() {
     const container = document.getElementById('chatMessages');
     if (chatMessageCounter > 0) return;
     let text = 'Установите гибридный ключ на вкладке «Обмен ключами»';
-    if (isInitiatorRole === true) text = 'Напишите первое сообщение (Вы Инициатор)';
-    else if (isInitiatorRole === false) text = 'Дождитесь первого сообщения от инициатора';
+    if (isInitiatorRole === true) text = 'Напишите первое сообщение, чтобы начать диалог';
+    else if (isInitiatorRole === false) text = 'Дождитесь, пока собеседник отправит первое сообщение';
     container.innerHTML = `<div class="chat-empty"><div class="chat-empty-icon">🔐</div><div class="chat-empty-text">${text}</div></div>`;
 }
 
@@ -1699,7 +1702,7 @@ function addMessageBubble(opts) {
     html += `<div class="msg-meta"><span>${formatTime(new Date())}</span></div><div class="msg-actions">`;
 
     if (opts.cipherText) {
-        if (!opts.fileInfo) html += `<button class="msg-action-btn" onclick="toggleCipher(${msgId})">🔤 Код</button><button class="msg-action-btn" onclick="copyCipher(${msgId})">📋 Копировать</button>`;
+        if (!opts.fileInfo) html += `<button class="msg-action-btn" onclick="toggleCipher(${msgId})">🔤 Шифротекст</button><button class="msg-action-btn" onclick="copyCipher(${msgId})">📋 Копировать</button>`;
         if (opts.side==='mine' && opts.fileInfo) html += `<button class="msg-action-btn" onclick="downloadEncryptedFile(${msgId})">💾 Скачать</button>`;
     }
     
@@ -1790,6 +1793,8 @@ async function chatEncrypt() {
             });
         }
         input.value = ''; autoResizeInput(); cancelReply();
+        // ИСПРАВЛЕНИЕ: ДОБАВЛЕНО УВЕДОМЛЕНИЕ ОБ УСПЕШНОМ ШИФРОВАНИИ
+        showStatus('success', 'Успешно зашифровано!');
     } catch(e) { showStatus('error','Ошибка шифрования: ' + e.message); }
 }
 
