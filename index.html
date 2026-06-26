@@ -256,10 +256,11 @@
             background: var(--primary-color); color: white; border: none;
             cursor: pointer; font-weight: bold; transition: all 0.2s;
         }
-        button:hover { background: var(--primary-hover); transform: translateY(-1px); box-shadow: var(--shadow); }
-        button:active { transform: translateY(1px); }
+        button:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); box-shadow: var(--shadow); }
+        button:active:not(:disabled) { transform: translateY(1px); }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
         .btn-danger { background: var(--danger-color); }
-        .btn-danger:hover { background: var(--danger-hover); }
+        .btn-danger:hover:not(:disabled) { background: var(--danger-hover); }
 
         .row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 
@@ -686,7 +687,7 @@
                             <button class="action-btn" onclick="copyField('mlKemCiphertextOutput')" title="Копировать">📋</button>
                         </div>
                     </div>
-                    <div class="status success" style="margin-top: 10px;">✅ Ваш чат готов к работе. Ждем собеседника.</div>
+                    <div class="status success" style="margin-top: 10px;">✅ Ваш чат готов к работе. Перейдите во вкладку "Чат".</div>
                 </div>
 
                 <!-- Если пользователь определен как принимающий -->
@@ -700,7 +701,7 @@
                             <button class="action-btn" onclick="clearField('mlKemCiphertextInput')" title="Очистить">🗑️</button>
                         </div>
                     </div>
-                    <button onclick="completeResponderConnection()" style="margin-top: 10px;">🔐 Завершить настройку</button>
+                    <button id="btnCompleteResponder" onclick="completeResponderConnection(this)" style="margin-top: 10px;">🔐 Завершить настройку</button>
                 </div>
             </div>
         </div>
@@ -738,7 +739,6 @@
         <div class="row">
             <div class="card">
                 <h3>🔑 Мои ключи подписи</h3>
-                <!-- ИСПРАВЛЕНИЕ: ДОБАВЛЕН onclick -->
                 <button id="generateEd25519Keys" onclick="generateEd25519KeyPair()">Сгенерировать ключи Ed25519</button>
 
                 <div class="verification-section" id="ed25519KeysGenerated" style="display: none;">
@@ -766,7 +766,6 @@
                             <button class="action-btn" onclick="clearField('ed25519PrivateKeyImport')" title="Очистить">🗑️</button>
                         </div>
                     </div>
-                    <!-- ИСПРАВЛЕНИЕ: ДОБАВЛЕН onclick -->
                     <button id="importEd25519PrivateKey" onclick="importEd25519PrivateKey()">Импортировать</button>
                 </div>
 
@@ -792,7 +791,6 @@
                         <button class="action-btn" onclick="clearField('friendEd25519PublicKey')" title="Очистить">🗑️</button>
                     </div>
                 </div>
-                <!-- ИСПРАВЛЕНИЕ: ДОБАВЛЕН onclick -->
                 <button id="importFriendEd25519Key" onclick="importFriendEd25519Key()">Установить ключ собеседника</button>
 
                 <div class="comparison-section" id="friendEd25519Verification" style="display: none;">
@@ -967,6 +965,8 @@ const Ratchet = {
             this.state.DHr = friendStaticPubX25519;
             const dh_out = sodium.crypto_scalarmult(this.state.DHs.privateKey, this.state.DHr);
             const kdf = this.KDF_RK(this.state.RK, dh_out);
+            secureZero(this.state.RK); // Очистка исходного RK
+            secureZero(dh_out);        // Очистка временного секрета DH
             this.state.RK = kdf.RK;
             this.state.CKs = kdf.CK;
         } else {
@@ -977,6 +977,7 @@ const Ratchet = {
     ratchetEncrypt: function() {
         if (!this.state.CKs) throw new Error("Подождите, пока Инициатор пришлет первое сообщение.");
         const kdf = this.KDF_CK(this.state.CKs);
+        secureZero(this.state.CKs); // Обнуление старого CKs
         this.state.CKs = kdf.CK;
         const header = { dh: arrayBufferToBase64(this.state.DHs.publicKey), n: this.state.Ns, pn: this.state.PN };
         this.state.Ns++;
@@ -1005,6 +1006,7 @@ const Ratchet = {
 
         this.skipMessageKeys(tempState, header.n);
         const kdf = this.KDF_CK(tempState.CKr);
+        secureZero(tempState.CKr); // Обнуление временного CKr
         tempState.CKr = kdf.CK;
         tempState.Nr++;
         return { mk: kdf.MK, tentativeState: tempState, skipKeyToRemove: null };
@@ -1019,10 +1021,16 @@ const Ratchet = {
         state.PN = state.Ns; state.Ns = 0; state.Nr = 0; state.DHr = dh_pub;
         let dh_out = sodium.crypto_scalarmult(state.DHs.privateKey, state.DHr);
         let kdf = this.KDF_RK(state.RK, dh_out);
+        secureZero(dh_out);
+        secureZero(state.RK);
         state.RK = kdf.RK; state.CKr = kdf.CK;
+        
         state.DHs = sodium.crypto_kx_keypair();
+        
         dh_out = sodium.crypto_scalarmult(state.DHs.privateKey, state.DHr);
         kdf = this.KDF_RK(state.RK, dh_out);
+        secureZero(dh_out);
+        secureZero(state.RK);
         state.RK = kdf.RK; state.CKs = kdf.CK;
     },
 
@@ -1031,6 +1039,7 @@ const Ratchet = {
         if (state.CKr != null) {
             while (state.Nr < until_n) {
                 const kdf = this.KDF_CK(state.CKr);
+                secureZero(state.CKr); // Обнуляем пропущенные CK
                 state.CKr = kdf.CK;
                 const skipKey = arrayBufferToBase64(state.DHr) + '_' + state.Nr;
                 state.skipped[skipKey] = kdf.MK;
@@ -1130,8 +1139,6 @@ function getFileIconEmoji(type) {
 // =====================================================================
 let noblePqModule = null;
 async function getNobleMlKem() {
-    // Библиотека уже загружена локально через тег <script>
-    // и записана нами в window.noblePqc в файле entry.js
     if (window.noblePqc) {
         return window.noblePqc;
     }
@@ -1149,7 +1156,6 @@ document.getElementById('generateHybridKeysBtn').addEventListener('click', async
         myKxKeyPair = sodium.crypto_kx_keypair();
         myMlKemKeyPair = ml_kem768.keygen();
 
-        // Склеиваем 32 байта X25519 и 1184 байта ML-KEM
         const combined = new Uint8Array(32 + 1184);
         combined.set(new Uint8Array(myKxKeyPair.publicKey), 0);
         combined.set(myMlKemKeyPair.publicKey, 32);
@@ -1221,12 +1227,25 @@ document.getElementById('establishConnectionBtn').addEventListener('click', asyn
         }
 
         const friendX25519Pk = new Uint8Array(friendBuf.slice(0, 32));
+        
+        // ВАЖНО: Проверяем, чтобы публичный ключ не состоял только из нулей
+        if (friendX25519Pk.every(b => b === 0)) {
+            showStatus('error', 'Критическая ошибка: недопустимый ключ X25519 (состоит из нулей)');
+            return;
+        }
+
         const friendMlKemPk = new Uint8Array(friendBuf.slice(32, 1216));
 
         // Вычисляем классический секрет
         const sClassic = sodium.crypto_scalarmult(myKxKeyPair.privateKey, friendX25519Pk);
+
+        // ВАЖНО: Проверка на точку малого порядка
+        if (sClassic.every(b => b === 0)) {
+            showStatus('error', 'Критическая ошибка: слабая точка X25519 (small subgroup)! Соединение прервано.');
+            secureZero(sClassic);
+            return;
+        }
         
-        // Определяем кто Инициатор (по X25519)
         const myX25519Pk = new Uint8Array(myKxKeyPair.publicKey);
         let cmp = 0;
         for (let i = 0; i < 32; i++) {
@@ -1266,14 +1285,22 @@ document.getElementById('establishConnectionBtn').addEventListener('click', asyn
 });
 
 // Завершение соединения принимающим
-async function completeResponderConnection() {
+async function completeResponderConnection(btn) {
+    if (btn && btn.disabled) return; // Защита от повторных нажатий
+    
+    if (btn) {
+        btn.disabled = true;
+        btn.originalText = btn.textContent;
+        btn.textContent = '⏳ Настройка...';
+    }
+
     try {
         const ctB64 = document.getElementById('mlKemCiphertextInput').value.trim();
-        if (!ctB64) { showStatus('error', 'Вставьте код подтверждения'); return; }
+        if (!ctB64) throw new Error('Вставьте код подтверждения');
 
         const ctBuf = new Uint8Array(base64ToArrayBuffer(ctB64));
         if (ctBuf.byteLength !== 1088) { // Ciphertext for ML-KEM-768
-            showStatus('error', 'Неверный размер кода подтверждения'); return;
+            throw new Error('Неверный размер кода подтверждения');
         }
 
         const { ml_kem768 } = await getNobleMlKem();
@@ -1281,7 +1308,14 @@ async function completeResponderConnection() {
         
         finalizeHybridMix();
         showStatus('success', '🧬 Гибридный ключ активирован! Переходите в чат.');
-    } catch(e) { showStatus('error', 'Ошибка деинкапсуляции: ' + e.message); }
+        if (btn) btn.textContent = '✅ Завершено';
+    } catch(e) { 
+        showStatus('error', 'Ошибка деинкапсуляции: ' + e.message); 
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = btn.originalText || '🔐 Завершить настройку';
+        }
+    }
 }
 
 // Финальный гибридный микс BLAKE2b(S_classic || S_pqc) -> Ratchet
@@ -1304,6 +1338,21 @@ function finalizeHybridMix() {
     isMlKemReady = true;
     updateChatEmptyState();
     updateChatHeader();
+
+    // БЕЗОПАСНАЯ ОЧИСТКА ВРЕМЕННЫХ И ИСХОДНЫХ СЕКРЕТОВ ИЗ ПАМЯТИ
+    secureZero(combined);
+    if (tempSClassic) secureZero(tempSClassic);
+    if (pqcSharedSecret) secureZero(pqcSharedSecret);
+    if (mlKemCiphertext) secureZero(mlKemCiphertext);
+    
+    // Секретный ключ ML-KEM нужен был только для одной установки соединения
+    if (myMlKemKeyPair && myMlKemKeyPair.secretKey) {
+        secureZero(myMlKemKeyPair.secretKey);
+    }
+    
+    tempSClassic = null;
+    pqcSharedSecret = null;
+    mlKemCiphertext = null;
 }
 
 // =====================================================================
@@ -1793,8 +1842,7 @@ async function chatEncrypt() {
             });
         }
         input.value = ''; autoResizeInput(); cancelReply();
-        // ИСПРАВЛЕНИЕ: ДОБАВЛЕНО УВЕДОМЛЕНИЕ ОБ УСПЕШНОМ ШИФРОВАНИИ
-        showStatus('success', 'Успешно зашифровано!');
+        showStatus('success', '🔒 Зашифровано!');
     } catch(e) { showStatus('error','Ошибка шифрования: ' + e.message); }
 }
 
@@ -1879,16 +1927,32 @@ function autoResizeInput() { const el = document.getElementById('chatInput'); el
 
 function destroyAllData() {
     if (!confirm('⚠️ Все ключи будут уничтожены!')) return;
-    secureZero(currentSymmetricKey); secureZero(derivedAesKeyRaw);
+    
+    // Безопасное затирание критически важных ключей и секретов
+    secureZero(currentSymmetricKey); 
+    secureZero(derivedAesKeyRaw);
+    
     if (myKxKeyPair) secureZero(myKxKeyPair.privateKey);
+    if (myMlKemKeyPair && myMlKemKeyPair.secretKey) secureZero(myMlKemKeyPair.secretKey);
+    if (pqcSharedSecret) secureZero(pqcSharedSecret);
+    if (tempSClassic) secureZero(tempSClassic);
+    if (tempFriendX25519Pk) secureZero(tempFriendX25519Pk);
+    if (mlKemCiphertext) secureZero(mlKemCiphertext);
+
     if (Ratchet.state.RK) secureZero(Ratchet.state.RK);
-    if (Ratchet.state.CKs) secureZero(Ratchet.state.CKs); if (Ratchet.state.CKr) secureZero(Ratchet.state.CKr);
+    if (Ratchet.state.CKs) secureZero(Ratchet.state.CKs); 
+    if (Ratchet.state.CKr) secureZero(Ratchet.state.CKr);
     if (Ratchet.state.DHs?.privateKey) secureZero(Ratchet.state.DHs.privateKey);
     for (const k in Ratchet.state.skipped) secureZero(Ratchet.state.skipped[k]);
 
+    // Обнуление ссылок
     currentSymmetricKey=null; myKxKeyPair=null; myMlKemKeyPair=null; myCombinedPublicKeyBuf=null;
     pqcSharedSecret=null; mlKemCiphertext=null; isMlKemReady=false; tempSClassic=null; tempFriendX25519Pk=null;
-    myEd25519PrivateKey=null; myEd25519PublicKeyRaw=null; secureZero(myEd25519PrivateKeyPkcs8); myEd25519PrivateKeyPkcs8=null;
+    myEd25519PrivateKey=null; myEd25519PublicKeyRaw=null; 
+    
+    if (myEd25519PrivateKeyPkcs8) secureZero(myEd25519PrivateKeyPkcs8); 
+    myEd25519PrivateKeyPkcs8=null;
+    
     friendEd25519PublicKeyRaw=null; ed25519SigningEnabled=false; ed25519VerifyEnabled=false;
     chatAttachedFile=null; replyToGlobalId=null; isInitiatorRole=null;
     Ratchet.state = { RK:null, CKs:null, CKr:null, DHs:null, DHr:null, Ns:0, Nr:0, PN:0, skipped:{} }; 
