@@ -1560,53 +1560,95 @@ async function encryptPayload(plainBytes, aadPrefix, messageKey) {
     const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
     const timestamp = writeTimestamp(Date.now());
     
-    const aad = new Uint8Array(aadPrefix.length + timestamp.length);
-    aad.set(aadPrefix, 0); aad.set(timestamp, aadPrefix.length);
-
-    const encrypted = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(plainBytes, aad, null, nonce, messageKey);
-    const payload = new Uint8Array(nonce.length + timestamp.length + encrypted.length);
-    payload.set(nonce, 0); payload.set(timestamp, nonce.length); payload.set(encrypted, nonce.length + timestamp.length);
-
-    const sig = await signData(payload);
-    let combined;
-    if (sig) {
-        combined = new Uint8Array(1 + 64 + payload.length);
-        combined[0] = 0x01; combined.set(sig, 1); combined.set(payload, 65);
-    } else {
-        combined = new Uint8Array(1 + payload.length);
-        combined[0] = 0x00; combined.set(payload, 1);
+    // --- ПОДПИСЬ ВНУТРИ ---
+    let sig = null;
+    if (ed25519SigningEnabled && myEd25519PrivateKey) {
+        sig = await signData(plainBytes);  // подписываем исходный plaintext
     }
-    return arrayBufferToBase64(combined);
+    
+    // Формируем буфер: [флаг] + [подпись (64 байта)] + [plainBytes]
+    let plainBytesWithSig;
+    if (sig) {
+        plainBytesWithSig = new Uint8Array(1 + 64 + plainBytes.length);
+        plainBytesWithSig[0] = 0x01;
+        plainBytesWithSig.set(sig, 1);
+        plainBytesWithSig.set(plainBytes, 65);
+    } else {
+        plainBytesWithSig = new Uint8Array(1 + plainBytes.length);
+        plainBytesWithSig[0] = 0x00;
+        plainBytesWithSig.set(plainBytes, 1);
+    }
+    
+    const aad = new Uint8Array(aadPrefix.length + timestamp.length);
+    aad.set(aadPrefix, 0);
+    aad.set(timestamp, aadPrefix.length);
+
+    const encrypted = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+        plainBytesWithSig, aad, null, nonce, messageKey
+    );
+    
+    const payload = new Uint8Array(nonce.length + timestamp.length + encrypted.length);
+    payload.set(nonce, 0);
+    payload.set(timestamp, nonce.length);
+    payload.set(encrypted, nonce.length + timestamp.length);
+    
+    return arrayBufferToBase64(payload);
 }
 
 async function decryptPayload(ctBase64, aadPrefix, messageKey) {
     await sodium.ready;
     const combined = new Uint8Array(base64ToArrayBuffer(ctBase64));
-    let nonce, timestamp, encrypted, signature = null, hasSig = false;
-    const flag = combined[0], NONCE_LEN = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES, TS_LEN = 8;
+    const NONCE_LEN = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES;
+    const TS_LEN = 8;
+    if (combined.length < NONCE_LEN + TS_LEN) {
+        throw new Error("Неверная длина зашифрованных данных");
+    }
+    const nonce = combined.slice(0, NONCE_LEN);
+    const timestamp = combined.slice(NONCE_LEN, NONCE_LEN + TS_LEN);
+    const encrypted = combined.slice(NONCE_LEN + TS_LEN);
     
-    if (flag === 0x01) {
-        hasSig = true; signature = combined.slice(1, 65);
-        nonce = combined.slice(65, 65 + NONCE_LEN); timestamp = combined.slice(65 + NONCE_LEN, 65 + NONCE_LEN + TS_LEN); encrypted = combined.slice(65 + NONCE_LEN + TS_LEN);
-    } else if (flag === 0x00) {
-        nonce = combined.slice(1, 1 + NONCE_LEN); timestamp = combined.slice(1 + NONCE_LEN, 1 + NONCE_LEN + TS_LEN); encrypted = combined.slice(1 + NONCE_LEN + TS_LEN);
-    } else throw new Error("Неизвестный формат пакета");
-
     const aad = new Uint8Array(aadPrefix.length + timestamp.length);
-    aad.set(aadPrefix, 0); aad.set(timestamp, aadPrefix.length);
+    aad.set(aadPrefix, 0);
+    aad.set(timestamp, aadPrefix.length);
 
     let decrypted;
-    try { decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(null, encrypted, aad, nonce, messageKey); } 
-    catch (e) { throw new Error("Неверный MAC или ключ"); }
+    try {
+        decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+            null, encrypted, aad, nonce, messageKey
+        );
+    } catch (e) {
+        throw new Error("Неверный MAC или ключ");
+    }
 
     const timeCheck = validateMessageTime(extractTimestamp(timestamp));
+    
+    // --- ИЗВЛЕКАЕМ ПОДПИСЬ ИЗ РАСШИФРОВАННЫХ ДАННЫХ ---
+    let hasSig = false;
     let sigResult = null;
-    if (hasSig && signature) {
-        const pv = new Uint8Array(nonce.length + timestamp.length + encrypted.length);
-        pv.set(nonce, 0); pv.set(timestamp, nonce.length); pv.set(encrypted, nonce.length + timestamp.length);
-        sigResult = await verifySignature(pv, signature);
+    let plainBytes = null;
+    if (!decrypted || decrypted.length === 0) {
+        throw new Error("Пустые расшифрованные данные");
     }
-    return { data: decrypted, hasSig, sigResult, timeCheck, isSigned: hasSig };
+    const flag = decrypted[0];
+    if (flag === 0x01) {
+        if (decrypted.length < 1 + 64) {
+            throw new Error("Неверный формат: недостаточно данных для подписи");
+        }
+        const sig = decrypted.slice(1, 65);
+        plainBytes = decrypted.slice(65);
+        // Проверяем подпись над извлечённым plaintext
+        const verification = await verifySignature(plainBytes, sig);
+        sigResult = verification;
+        hasSig = true;
+    } else if (flag === 0x00) {
+        plainBytes = decrypted.slice(1);
+        hasSig = false;
+        sigResult = { verified: false, reason: 'no_signature', message: 'Без подписи' };
+    } else {
+        throw new Error("Неизвестный флаг подписи");
+    }
+    
+    return { data: plainBytes, hasSig, sigResult, timeCheck, isSigned: hasSig };
 }
 
 let mediaRecorder = null, audioChunks = [], isVoiceRecording = false;
