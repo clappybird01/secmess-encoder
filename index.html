@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' blob:; media-src blob:; object-src 'none'; frame-src 'none'; connect-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval';">
-    <title>Secure Messenger (Hybrid PQC)</title>
+    <title>Secure Messenger</title>
     <style>
         :root {
             --bg-color: #f5f0eb;
@@ -35,6 +35,7 @@
             --chat-bg: #e5ddd5;
             --reply-border: #4caf50;
             --reply-bg: rgba(76, 175, 80, 0.08);
+            --step-indicator-color: var(--primary-color);
         }
 
         [data-theme="dark"] {
@@ -65,6 +66,7 @@
             --chat-bg: #0b141a;
             --reply-border: #6b8cce;
             --reply-bg: rgba(107, 140, 206, 0.1);
+            --step-indicator-color: #6b8cce;
         }
 
         [data-theme="rose"] {
@@ -92,6 +94,7 @@
             --chat-bg: #fdf2f4;
             --reply-border: #c45c6a;
             --reply-bg: rgba(196, 92, 106, 0.08);
+            --step-indicator-color: #c45c6a;
         }
 
         [data-theme="ocean"] {
@@ -119,6 +122,7 @@
             --chat-bg: #e8f4f8;
             --reply-border: #2e7d9b;
             --reply-bg: rgba(46, 125, 155, 0.08);
+            --step-indicator-color: #2e7d9b;
         }
 
         [data-theme="forest"] {
@@ -146,6 +150,7 @@
             --chat-bg: #f0f5f0;
             --reply-border: #4a7c4a;
             --reply-bg: rgba(74, 124, 74, 0.08);
+            --step-indicator-color: #4a7c4a;
         }
 
         [data-theme="midnight"] {
@@ -174,15 +179,16 @@
             --chat-bg: #0d1117;
             --reply-border: #58a6ff;
             --reply-bg: rgba(88, 166, 255, 0.08);
+            --step-indicator-color: #58a6ff;
         }
 
         * { box-sizing: border-box; }
 
         body {
             font-family: system-ui, -apple-system, sans-serif;
-            max-width: 900px;
-            margin: 20px auto;
-            padding: 0 20px;
+            max-width: 960px;
+            margin: 16px auto;
+            padding: 0 16px;
             background: var(--bg-gradient);
             background-attachment: fixed;
             color: var(--text-color);
@@ -193,31 +199,33 @@
         /* ===== Панель тем ===== */
         .theme-panel {
             position: fixed;
-            top: 15px;
-            right: 15px;
+            top: 12px;
+            right: 12px;
             z-index: 1000;
             background: var(--card-bg);
             backdrop-filter: var(--glass-blur);
             border: 1px solid var(--border-color);
             border-radius: 12px;
-            padding: 10px;
+            padding: 8px 12px;
             box-shadow: var(--shadow);
             max-width: 200px;
         }
         .theme-panel-header {
             display: flex; align-items: center; justify-content: space-between;
-            cursor: pointer; padding: 5px; border-radius: 8px; transition: background 0.2s;
+            cursor: pointer; padding: 4px 6px; border-radius: 8px; transition: background 0.2s;
+            font-size: 14px;
         }
         .theme-panel-header:hover { background: var(--secondary-bg); }
-        .theme-options { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color); }
+        .theme-options { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-color); }
         .theme-options.show { display: block; }
         .theme-option {
-            display: flex; align-items: center; gap: 10px; padding: 8px 10px;
-            border-radius: 8px; cursor: pointer; transition: all 0.2s; margin: 4px 0;
+            display: flex; align-items: center; gap: 10px; padding: 6px 10px;
+            border-radius: 8px; cursor: pointer; transition: all 0.2s; margin: 3px 0;
+            font-size: 13px;
         }
         .theme-option:hover { background: var(--secondary-bg); transform: translateX(3px); }
         .theme-option.active { background: var(--primary-color); color: white; }
-        .theme-preview { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border-color); flex-shrink: 0; }
+        .theme-preview { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border-color); flex-shrink: 0; }
         .theme-preview.cream { background: linear-gradient(135deg, #f5f0eb, #e8e0d5); }
         .theme-preview.dark { background: linear-gradient(135deg, #1a1a2e, #16213e); }
         .theme-preview.rose { background: linear-gradient(135deg, #fdf2f4, #f8d7dc); }
@@ -225,54 +233,111 @@
         .theme-preview.forest { background: linear-gradient(135deg, #f0f5f0, #c8dcc8); }
         .theme-preview.midnight { background: linear-gradient(135deg, #0d1117, #21262d); }
 
-        /* ===== Вкладки ===== */
-        .tabs {
-            display: flex; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); flex-wrap: wrap;
+        /* ===== Шапка ===== */
+        .app-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 0 6px 0; flex-wrap: wrap;
         }
-        .tab {
-            padding: 10px 15px; cursor: pointer; border: 1px solid transparent; border-bottom: none;
-            border-radius: 8px 8px 0 0; margin-right: 5px; margin-bottom: 5px;
-            background: var(--secondary-bg); backdrop-filter: var(--glass-blur);
-            flex: 1; min-width: 120px; text-align: center; transition: all 0.2s; font-size: 14px;
+        .app-header h1 {
+            margin: 0; font-size: 1.5em; display: flex; align-items: center; gap: 8px;
         }
-        .tab:hover { background: var(--card-bg); }
-        .tab.active { background: var(--primary-color); color: white; border-color: var(--border-color); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
+        .app-header h1 .badge {
+            font-size: 11px; font-weight: 600; background: var(--primary-color); color: white;
+            padding: 2px 10px; border-radius: 20px; letter-spacing: 0.3px;
+        }
+        .step-indicators {
+            display: flex; gap: 6px; margin: 8px 0 14px 0; flex-wrap: wrap;
+        }
+        .step-dot {
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 14px; border-radius: 20px;
+            background: var(--secondary-bg); border: 1px solid var(--border-color);
+            font-size: 13px; font-weight: 500; transition: all 0.3s;
+            opacity: 0.5; cursor: default;
+        }
+        .step-dot.active {
+            opacity: 1; background: var(--primary-color); color: white;
+            border-color: var(--primary-color);
+        }
+        .step-dot.done {
+            opacity: 0.85; border-color: var(--step-indicator-color);
+        }
+        .step-dot .num { font-weight: 700; margin-right: 2px; }
+        .step-dot .check { display: none; }
+        .step-dot.done .check { display: inline; }
+        .step-dot.done .num { display: none; }
+
+        /* ===== Карточки шагов ===== */
+        .step-card {
+            display: none;
+            border: 1px solid var(--border-color);
+            padding: 20px 22px;
+            margin: 12px 0 16px 0;
+            border-radius: 14px;
+            background: var(--card-bg);
+            backdrop-filter: var(--glass-blur);
+            box-shadow: var(--shadow);
+            animation: fadeIn 0.35s ease;
+        }
+        .step-card.active { display: block; }
+        .step-card h2 {
+            margin: 0 0 6px 0; font-size: 1.2em; display: flex; align-items: center; gap: 8px;
+        }
+        .step-card .sub { font-size: 14px; opacity: 0.7; margin-bottom: 14px; }
+
+        .card-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 
         /* ===== Базовые элементы ===== */
         textarea, input[type="text"], input[type="password"], button {
-            width: 100%; margin: 8px 0; padding: 12px; box-sizing: border-box;
+            width: 100%; margin: 6px 0; padding: 11px 14px; box-sizing: border-box;
             border: 1px solid var(--border-color); border-radius: 8px;
             background: var(--card-bg); backdrop-filter: var(--glass-blur);
-            color: var(--text-color); font-size: 16px; transition: all 0.2s;
+            color: var(--text-color); font-size: 15px; transition: all 0.2s;
         }
         textarea:focus, input[type="text"]:focus, input[type="password"]:focus {
             outline: none; border-color: var(--primary-color);
             box-shadow: 0 0 0 3px rgba(139, 90, 60, 0.1);
         }
-        textarea { min-height: 120px; font-family: monospace; resize: vertical; }
+        textarea { min-height: 80px; font-family: monospace; resize: vertical; }
         button {
             background: var(--primary-color); color: white; border: none;
-            cursor: pointer; font-weight: bold; transition: all 0.2s;
+            cursor: pointer; font-weight: 600; transition: all 0.2s;
+            width: auto; padding: 11px 24px;
         }
         button:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); box-shadow: var(--shadow); }
         button:active:not(:disabled) { transform: translateY(1px); }
-        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-danger { background: var(--danger-color); }
         .btn-danger:hover:not(:disabled) { background: var(--danger-hover); }
+        .btn-outline { background: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-outline:hover { background: var(--secondary-bg); transform: none; box-shadow: none; }
+        .btn-success { background: #28a745; }
+        .btn-success:hover:not(:disabled) { background: #218838; }
 
-        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-
-        .card {
-            border: 1px solid var(--border-color); padding: 15px; margin: 10px 0;
-            border-radius: 12px; background: var(--card-bg); backdrop-filter: var(--glass-blur);
-            box-shadow: var(--shadow); animation: fadeIn 0.3s ease;
+        .input-wrapper { position: relative; }
+        .input-actions {
+            position: absolute; top: 4px; right: 4px;
+            display: flex; gap: 4px; z-index: 5;
         }
-        small { color: var(--text-color); opacity: 0.8; }
+        .action-btn {
+            width: 30px; height: 30px; padding: 0; margin: 0;
+            background: var(--secondary-bg); border: 1px solid var(--border-color);
+            border-radius: 6px; font-size: 14px; line-height: 30px; text-align: center;
+            cursor: pointer; opacity: 0.6; transition: all 0.2s;
+            color: var(--text-color);
+        }
+        .action-btn:hover { opacity: 1; background: var(--card-bg); transform: scale(1.05); }
+
+        .fingerprint {
+            font-size: 18px; text-align: center; padding: 14px;
+            background: var(--secondary-bg); border-radius: 8px; margin: 8px 0;
+            border: 2px dashed var(--border-color);
+            word-break: break-all; font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            letter-spacing: 0.5px; line-height: 1.6;
+        }
 
         .status {
-            padding: 12px; border-radius: 8px; margin: 10px 0; border: 1px solid;
+            padding: 11px 16px; border-radius: 8px; margin: 10px 0; border: 1px solid;
             backdrop-filter: var(--glass-blur);
         }
         .status.success { background: var(--status-success); color: var(--status-success-text); border-color: var(--status-success); }
@@ -281,82 +346,68 @@
         .status.warning { background: var(--verification-bg); color: #856404; border-color: #ffc107; }
         [data-theme="dark"] .status.warning, [data-theme="midnight"] .status.warning { color: #ffc107; }
 
-        .fingerprint {
-            font-size: 18px; text-align: center; padding: 15px; background: var(--secondary-bg);
-            border-radius: 8px; margin: 10px 0; border: 2px dashed var(--border-color);
-            word-break: break-all; font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
-            letter-spacing: 0.5px; line-height: 1.6;
+        .security-notice {
+            background: var(--verification-bg); border: 1px solid var(--border-color);
+            padding: 12px 16px; border-radius: 8px; margin: 10px 0; font-size: 14px;
         }
-        .verification-section { background: var(--verification-bg); padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid var(--border-color); }
-        .comparison-section { background: var(--comparison-bg); padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid var(--border-color); }
-        
-        /* Стили гибридного слоя */
-        .hybrid-badge {
-            display: inline-block;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            padding: 3px 10px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: bold;
-            letter-spacing: 0.5px;
-            margin-left: 8px;
-            vertical-align: middle;
+        .verification-section { background: var(--verification-bg); padding: 16px; border-radius: 8px; margin: 12px 0; border: 1px solid var(--border-color); }
+        .comparison-section { background: var(--comparison-bg); padding: 16px; border-radius: 8px; margin: 12px 0; border: 1px solid var(--border-color); }
+
+        .hybrid-ciphertext-container {
+            margin-top: 12px; padding: 16px; border: 2px solid var(--primary-color); border-radius: 8px; background: var(--secondary-bg);
+            position: relative; overflow: hidden;
         }
+        .hybrid-ciphertext-container::before {
+            content: '⚛️ Код подтверждения';
+            position: absolute;
+            top: 0; right: 0;
+            background: var(--primary-color); color: white;
+            padding: 3px 14px; font-size: 10px; font-weight: 700;
+            border-radius: 0 8px 0 8px; letter-spacing: 0.5px;
+        }
+
+        .verification-choice {
+            display: flex; gap: 12px; margin: 12px 0 16px 0; flex-wrap: wrap;
+        }
+        .verification-choice button {
+            flex: 1; min-width: 160px; padding: 14px 20px; font-size: 15px;
+            border: 2px solid var(--border-color); background: var(--card-bg);
+            color: var(--text-color); border-radius: 10px; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .verification-choice button:hover { border-color: var(--primary-color); background: var(--secondary-bg); }
+        .verification-choice button.selected { border-color: var(--primary-color); background: var(--primary-color); color: white; }
+        .verification-choice button .icon { font-size: 22px; display: block; margin-bottom: 4px; }
 
         .key-info { background: var(--secondary-bg); padding: 10px; border-radius: 8px; margin: 5px 0; font-family: monospace; font-size: 12px; }
-        .security-notice { background: var(--verification-bg); border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; margin: 10px 0; font-size: 14px; }
 
-        .input-wrapper { position: relative; }
-        .input-actions { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; z-index: 5; }
-        .action-btn {
-            width: 28px; height: 28px; padding: 0; margin: 0;
-            background: var(--secondary-bg); border: 1px solid var(--border-color);
-            border-radius: 6px; font-size: 14px; line-height: 28px; text-align: center;
-            cursor: pointer; opacity: 0.7; transition: all 0.2s;
-        }
-        .action-btn:hover { opacity: 1; background: var(--card-bg); transform: scale(1.1); }
-        .input-wrapper textarea, .input-wrapper input { padding-right: 100px !important; }
-        .input-wrapper .fingerprint { position: relative; padding-right: 40px; }
-
-        .destroy-section {
-            margin-top: 30px; padding: 20px; border: 2px solid var(--danger-color);
-            border-radius: 12px; background: var(--card-bg); text-align: center;
-        }
-        .destroy-section h3 { color: var(--danger-color); margin-bottom: 10px; }
-        .destroy-section p { font-size: 14px; opacity: 0.8; margin-bottom: 15px; }
-
-        /* ===== ЧАТ-ИНТЕРФЕЙС ===== */
+        /* ===== ЧАТ ===== */
         .chat-container {
-            display: flex; flex-direction: column; height: 82vh; min-height: 500px;
+            display: flex; flex-direction: column; height: 70vh; min-height: 420px;
             border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden;
             background: var(--card-bg); box-shadow: var(--shadow);
             resize: vertical;
             overflow: auto;
         }
-
         .chat-header {
-            padding: 12px 16px; background: var(--primary-color); color: white;
+            padding: 10px 16px; background: var(--primary-color); color: white;
             display: flex; align-items: center; justify-content: space-between;
             flex-shrink: 0;
         }
-        .chat-header h3 { margin: 0; font-size: 16px; }
+        .chat-header h3 { margin: 0; font-size: 15px; }
         .chat-header-status { font-size: 12px; opacity: 0.85; }
-
         .chat-messages {
-            flex: 1; overflow-y: auto; padding: 16px;
+            flex: 1; overflow-y: auto; padding: 14px;
             background: var(--chat-bg);
-            display: flex; flex-direction: column; gap: 8px;
+            display: flex; flex-direction: column; gap: 6px;
             min-height: 0;
         }
-
         .chat-messages::-webkit-scrollbar { width: 6px; }
         .chat-messages::-webkit-scrollbar-track { background: transparent; }
         .chat-messages::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
 
-        /* Баббл сообщения */
         .msg-bubble {
-            max-width: 80%; padding: 8px 12px; border-radius: 12px;
+            max-width: 78%; padding: 8px 12px; border-radius: 12px;
             position: relative; word-wrap: break-word; line-height: 1.4;
             animation: msgAppear 0.25s ease-out;
         }
@@ -364,32 +415,19 @@
             from { opacity: 0; transform: translateY(10px) scale(0.97); }
             to { opacity: 1; transform: translateY(0) scale(1); }
         }
-
-        .msg-mine {
-            align-self: flex-end; background: var(--msg-mine-bg); color: var(--msg-mine-text);
-            border-bottom-right-radius: 4px;
-        }
-        .msg-friend {
-            align-self: flex-start; background: var(--msg-friend-bg); color: var(--msg-friend-text);
-            border-bottom-left-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
-
+        .msg-mine { align-self: flex-end; background: var(--msg-mine-bg); color: var(--msg-mine-text); border-bottom-right-radius: 4px; }
+        .msg-friend { align-self: flex-start; background: var(--msg-friend-bg); color: var(--msg-friend-text); border-bottom-left-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
         .msg-sender { font-size: 11px; font-weight: 700; margin-bottom: 2px; opacity: 0.7; }
         .msg-text { font-size: 15px; white-space: pre-wrap; }
-        .msg-meta {
-            display: flex; align-items: center; justify-content: flex-end;
-            gap: 6px; margin-top: 4px; font-size: 11px; opacity: 0.6;
-        }
-
+        .msg-meta { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 4px; font-size: 11px; opacity: 0.6; }
         .msg-actions { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
         .msg-action-btn {
             padding: 3px 8px; font-size: 11px; border-radius: 6px;
-            background: rgba(128,128,128,0.15); border: none; color: inherit;
+            background: rgba(128,128,128,0.12); border: none; color: inherit;
             cursor: pointer; transition: all 0.15s; margin: 0; width: auto;
             font-weight: normal;
         }
-        .msg-action-btn:hover { background: rgba(128,128,128,0.3); transform: none; box-shadow: none; }
-
+        .msg-action-btn:hover { background: rgba(128,128,128,0.25); transform: none; box-shadow: none; }
         .msg-cipher {
             display: none; margin-top: 6px; padding: 6px 8px;
             background: rgba(0,0,0,0.06); border-radius: 6px;
@@ -400,7 +438,6 @@
             background: rgba(255,255,255,0.06);
         }
         .msg-cipher.show { display: block; }
-
         .msg-reply-preview {
             padding: 4px 8px; margin-bottom: 4px; border-left: 3px solid var(--reply-border);
             background: var(--reply-bg); border-radius: 0 6px 6px 0;
@@ -408,22 +445,19 @@
             max-height: 40px; overflow: hidden; text-overflow: ellipsis;
         }
         .msg-reply-preview:hover { opacity: 1; }
-
         .msg-file-info {
-            display: flex; align-items: center; gap: 8px; padding: 8px;
+            display: flex; align-items: center; gap: 8px; padding: 6px 10px;
             background: var(--msg-file-bg); border-radius: 8px; margin: 4px 0;
         }
-        .msg-file-icon { font-size: 28px; flex-shrink: 0; }
+        .msg-file-icon { font-size: 26px; flex-shrink: 0; }
         .msg-file-details { flex: 1; min-width: 0; }
         .msg-file-name { font-weight: 600; font-size: 13px; word-break: break-all; }
         .msg-file-size { font-size: 11px; opacity: 0.7; }
-
         .msg-media { margin: 6px 0; border-radius: 8px; overflow: hidden; }
-        .msg-media img { max-width: 100%; max-height: 300px; display: block; border-radius: 8px; cursor: pointer; }
+        .msg-media img { max-width: 100%; max-height: 280px; display: block; border-radius: 8px; cursor: pointer; }
         .msg-media video, .msg-media audio { max-width: 100%; border-radius: 8px; }
-
         .msg-signature {
-            font-size: 11px; margin-top: 4px; padding: 2px 6px;
+            font-size: 11px; margin-top: 4px; padding: 2px 8px;
             border-radius: 4px; display: inline-block;
         }
         .msg-sig-ok { background: rgba(40,167,69,0.15); color: #28a745; }
@@ -434,7 +468,7 @@
         [data-theme="dark"] .msg-sig-warn, [data-theme="midnight"] .msg-sig-warn { color: #ffc107; }
 
         .chat-reply-bar {
-            display: none; padding: 8px 12px; background: var(--secondary-bg);
+            display: none; padding: 6px 12px; background: var(--secondary-bg);
             border-top: 1px solid var(--border-color);
             align-items: center; gap: 8px; flex-shrink: 0;
         }
@@ -455,22 +489,20 @@
 
         .chat-input-area {
             display: flex; align-items: flex-end; gap: 8px;
-            padding: 10px 12px; background: var(--card-bg);
+            padding: 8px 12px; background: var(--card-bg);
             border-top: 1px solid var(--border-color); flex-shrink: 0;
         }
-
         .chat-attach-btn {
-            width: 40px; height: 40px; border-radius: 50%;
-            background: transparent; border: none; font-size: 22px;
+            width: 38px; height: 38px; border-radius: 50%;
+            background: transparent; border: none; font-size: 20px;
             cursor: pointer; display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0; padding: 0; margin: 0; color: var(--text-color); opacity: 0.6;
+            flex-shrink: 0; padding: 0; margin: 0; color: var(--text-color); opacity: 0.5;
             transition: all 0.2s;
         }
         .chat-attach-btn:hover { opacity: 1; background: var(--secondary-bg); transform: none; box-shadow: none; }
-
         .chat-input-wrapper { flex: 1; position: relative; min-width: 0; }
         .chat-input {
-            width: 100%; min-height: 40px; max-height: 120px; padding: 10px 14px;
+            width: 100%; min-height: 38px; max-height: 110px; padding: 8px 14px;
             border: 1px solid var(--border-color); border-radius: 20px;
             background: var(--secondary-bg); color: var(--text-color);
             font-size: 15px; resize: none; margin: 0;
@@ -479,10 +511,9 @@
         }
         .chat-input:focus { outline: none; border-color: var(--primary-color); }
         .chat-input::placeholder { color: var(--text-color); opacity: 0.4; }
-
         .chat-file-preview {
-            display: none; padding: 6px 10px; background: var(--secondary-bg);
-            border-radius: 8px; margin-bottom: 6px;
+            display: none; padding: 4px 10px; background: var(--secondary-bg);
+            border-radius: 8px; margin-bottom: 4px;
             align-items: center; gap: 8px; font-size: 13px;
         }
         .chat-file-preview.show { display: flex; }
@@ -491,276 +522,282 @@
             font-size: 16px; padding: 0; margin: 0; width: auto; color: var(--text-color);
         }
         .chat-file-preview-close:hover { opacity: 1; transform: none; box-shadow: none; }
-
         .chat-send-btns { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
         .chat-send-btn {
-            width: 40px; height: 40px; border-radius: 50%;
+            width: 38px; height: 38px; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            font-size: 16px; padding: 0; margin: 0; border: none; cursor: pointer;
+            font-size: 15px; padding: 0; margin: 0; border: none; cursor: pointer;
             transition: all 0.15s;
         }
-        .chat-send-btn:hover { transform: scale(1.1); box-shadow: none; }
+        .chat-send-btn:hover { transform: scale(1.08); box-shadow: none; }
         .chat-encrypt-btn { background: var(--primary-color); color: white; }
         .chat-decrypt-btn { background: #28a745; color: white; }
-
         .chat-empty {
             flex: 1; display: flex; flex-direction: column;
             align-items: center; justify-content: center; opacity: 0.5;
             text-align: center; padding: 20px;
         }
-        .chat-empty-icon { font-size: 48px; margin-bottom: 12px; }
+        .chat-empty-icon { font-size: 42px; margin-bottom: 10px; }
         .chat-empty-text { font-size: 14px; line-height: 1.5; }
 
-        @media (max-width: 768px) {
-            body { margin: 10px auto; padding: 0 15px; }
-            .theme-panel { position: relative; top: auto; right: auto; margin-bottom: 15px; max-width: none; }
-            .tabs { flex-direction: column; }
-            .tab { margin-right: 0; margin-bottom: 5px; border-radius: 8px; text-align: left; }
-            .row { grid-template-columns: 1fr; gap: 15px; }
-            .fingerprint { font-size: 16px; padding: 10px; }
-            h1 { font-size: 1.5em; }
-            textarea, input, button { padding: 14px; }
-            .chat-container { height: 75vh; min-height: 400px; }
-            .msg-bubble { max-width: 88%; }
-        }
-        @media (max-width: 480px) {
-            .card { padding: 12px; }
-            .fingerprint { font-size: 14px; }
-            h1 { font-size: 1.3em; }
-            .chat-container { height: 70vh; }
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: var(--secondary-bg); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--primary-color); }
-
-        .recording-active { 
-            color: var(--danger-color) !important; 
-            animation: pulseRecord 1.5s infinite; 
-        }
-        @keyframes pulseRecord { 
-            0% { transform: scale(1); } 
-            50% { transform: scale(1.2); } 
-            100% { transform: scale(1); } 
-        }
-        
+        .recording-active { color: var(--danger-color) !important; animation: pulseRecord 1.5s infinite; }
+        @keyframes pulseRecord { 0% { transform: scale(1); } 50% { transform: scale(1.15); } 100% { transform: scale(1); } }
         .audio-speed-select {
             background: var(--card-bg); color: var(--text-color);
             border: 1px solid var(--border-color); border-radius: 6px;
-            padding: 4px 8px; font-size: 13px; cursor: pointer; outline: none;
+            padding: 3px 8px; font-size: 13px; cursor: pointer; outline: none;
             flex-shrink: 0;
         }
 
-        .hybrid-ciphertext-container {
-            margin-top: 15px; padding: 15px; border: 2px solid var(--primary-color); border-radius: 8px; background: var(--secondary-bg);
-            position: relative; overflow: hidden;
+        .destroy-section {
+            margin-top: 24px; padding: 18px 20px; border: 2px solid var(--danger-color);
+            border-radius: 12px; background: var(--card-bg); text-align: center;
         }
-        .hybrid-ciphertext-container::before {
-            content: '⚛️ PQC СЛОЙ';
-            position: absolute;
-            top: 0; right: 0;
-            background: var(--primary-color); color: white;
-            padding: 4px 12px; font-size: 10px; font-weight: bold;
-            border-radius: 0 8px 0 8px; letter-spacing: 1px;
+        .destroy-section h3 { color: var(--danger-color); margin: 0 0 6px 0; font-size: 1.1em; }
+        .destroy-section p { font-size: 14px; opacity: 0.7; margin: 0 0 12px 0; }
+
+        .flex { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .flex-1 { flex: 1; min-width: 0; }
+        .mt-8 { margin-top: 8px; }
+        .mb-8 { margin-bottom: 8px; }
+        .text-center { text-align: center; }
+        .gap-6 { gap: 6px; }
+        .w-full { width: 100%; }
+
+        @media (max-width: 768px) {
+            body { margin: 10px auto; padding: 0 12px; }
+            .theme-panel { position: relative; top: auto; right: auto; margin-bottom: 12px; max-width: none; }
+            .app-header h1 { font-size: 1.2em; }
+            .step-dot { font-size: 12px; padding: 4px 10px; }
+            .step-card { padding: 14px 16px; }
+            .card-row { grid-template-columns: 1fr; gap: 12px; }
+            .fingerprint { font-size: 16px; padding: 10px; }
+            .chat-container { height: 65vh; min-height: 350px; }
+            .msg-bubble { max-width: 88%; }
+            .verification-choice button { min-width: 120px; padding: 10px 14px; font-size: 14px; }
+        }
+        @media (max-width: 480px) {
+            .step-card { padding: 12px; }
+            .fingerprint { font-size: 14px; }
+            .chat-container { height: 58vh; }
+            .step-dot .label { display: none; }
+            .step-dot { padding: 4px 8px; }
         }
 
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--secondary-bg); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--primary-color); }
     </style>
     <script src="sodium.js"></script>
     <script src="noble-pqc.js"></script>
 </head>
 <body>
 
-    <!-- Панель тем -->
-    <div class="theme-panel">
-        <div class="theme-panel-header" onclick="toggleThemePanel()">
-            <span>🎨 <span id="current-theme-name">Кремовая</span></span>
-            <span id="theme-arrow">▼</span>
+<!-- ===== Панель тем ===== -->
+<div class="theme-panel">
+    <div class="theme-panel-header" onclick="toggleThemePanel()">
+        <span>🎨 <span id="current-theme-name">Кремовая</span></span>
+        <span id="theme-arrow">▼</span>
+    </div>
+    <div class="theme-options" id="theme-options">
+        <div class="theme-option active" data-theme="cream" onclick="setTheme('cream')">
+            <div class="theme-preview cream"></div><span>Кремовая</span>
         </div>
-        <div class="theme-options" id="theme-options">
-            <div class="theme-option active" data-theme="cream" onclick="setTheme('cream')">
-                <div class="theme-preview cream"></div><span>Кремовая</span>
-            </div>
-            <div class="theme-option" data-theme="dark" onclick="setTheme('dark')">
-                <div class="theme-preview dark"></div><span>Тёмная</span>
-            </div>
-            <div class="theme-option" data-theme="rose" onclick="setTheme('rose')">
-                <div class="theme-preview rose"></div><span>Розовая</span>
-            </div>
-            <div class="theme-option" data-theme="ocean" onclick="setTheme('ocean')">
-                <div class="theme-preview ocean"></div><span>Океан</span>
-            </div>
-            <div class="theme-option" data-theme="forest" onclick="setTheme('forest')">
-                <div class="theme-preview forest"></div><span>Лесная</span>
-            </div>
-            <div class="theme-option" data-theme="midnight" onclick="setTheme('midnight')">
-                <div class="theme-preview midnight"></div><span>Полночь</span>
-            </div>
+        <div class="theme-option" data-theme="dark" onclick="setTheme('dark')">
+            <div class="theme-preview dark"></div><span>Тёмная</span>
+        </div>
+        <div class="theme-option" data-theme="rose" onclick="setTheme('rose')">
+            <div class="theme-preview rose"></div><span>Розовая</span>
+        </div>
+        <div class="theme-option" data-theme="ocean" onclick="setTheme('ocean')">
+            <div class="theme-preview ocean"></div><span>Океан</span>
+        </div>
+        <div class="theme-option" data-theme="forest" onclick="setTheme('forest')">
+            <div class="theme-preview forest"></div><span>Лесная</span>
+        </div>
+        <div class="theme-option" data-theme="midnight" onclick="setTheme('midnight')">
+            <div class="theme-preview midnight"></div><span>Полночь</span>
         </div>
     </div>
+</div>
 
-    <h1>🔐 Secure Messenger <span class="hybrid-badge">Hybrid X25519+PQC</span></h1>
+<!-- ===== Шапка ===== -->
+<div class="app-header">
+    <h1>🔐 Secure Messenger <span class="badge">Защищённый чат</span></h1>
+</div>
 
-    <div class="tabs">
-        <div class="tab active" data-tab="hybrid-exchange">🔐 Обмен ключами</div>
-        <div class="tab" data-tab="signatures">✍️ Подписи</div>
-        <div class="tab" data-tab="chat">💬 Чат</div>
-    </div>
+<!-- ===== Индикаторы шагов ===== -->
+<div class="step-indicators" id="stepIndicators">
+    <div class="step-dot active" data-step="1"><span class="num">1</span><span class="check">✅</span> <span class="label">Ключи</span></div>
+    <div class="step-dot" data-step="2"><span class="num">2</span><span class="check">✅</span> <span class="label">Собеседник</span></div>
+    <div class="step-dot" data-step="3"><span class="num">3</span><span class="check">✅</span> <span class="label">Код</span></div>
+    <div class="step-dot" data-step="4"><span class="num">4</span><span class="check">✅</span> <span class="label">Проверка</span></div>
+    <div class="step-dot" data-step="5"><span class="num">5</span><span class="check">✅</span> <span class="label">Чат</span></div>
+</div>
 
-    <!-- ==================== Вкладка обмена гибридными ключами ==================== -->
-    <div id="hybrid-exchange" class="tab-content active">
-        <div class="card">
-            <h3>🔐 Шаг 1. Создайте ваш гибридный ключ</h3>
-            <div class="security-notice">
-                <strong>🎯 Под капотом упаковано два ключа: классический X25519 и квантово-устойчивый ML-KEM-768.</strong> 
-                Просто скопируйте одну строчку ниже и передайте ее собеседнику.
-            </div>
-            <button id="generateHybridKeysBtn">🔑 Создать мои ключи</button>
+<!-- ===================================================================== -->
+<!-- ШАГ 1: Генерация ключей                                                -->
+<!-- ===================================================================== -->
+<div class="step-card active" id="step1">
+    <h2>🔑 Шаг 1. Ваш ключ</h2>
+    <div class="sub">Создайте ключ для защищённого соединения. Он будет скопирован в буфер обмена автоматически.</div>
 
-            <div class="verification-section">
-                <h4>🔍 Отпечаток ключа:</h4>
-                <div class="input-wrapper">
-                    <div class="fingerprint" id="myHybridFingerprint">—</div>
-                    <div class="input-actions" style="top: 4px;">
-                        <button class="action-btn" onclick="copyField('myHybridFingerprint')" title="Копировать">📋</button>
-                    </div>
-                </div>
+    <button id="generateHybridKeysBtn" style="width:100%;">🔐 Создать мой ключ</button>
 
-                <label>Мой гибридный публичный ключ (отправьте его собеседнику):</label>
-                <div class="input-wrapper">
-                    <textarea id="myHybridPublicKey" readonly></textarea>
-                    <div class="input-actions">
-                        <button class="action-btn" onclick="copyField('myHybridPublicKey')" title="Копировать">📋</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <h3>🤝 Шаг 2. Ключ собеседника и соединение</h3>
-            <label>Гибридный ключ собеседника:</label>
+    <div id="myKeysDisplay" style="display:none;">
+        <div class="verification-section mt-8">
+            <h4>🔍 Отпечаток вашего ключа:</h4>
             <div class="input-wrapper">
-                <textarea id="friendHybridPublicKey" placeholder="Вставьте единую строку гибридного ключа собеседника..." oninput="updateFriendHybridFingerprint()"></textarea>
+                <div class="fingerprint" id="myHybridFingerprint">—</div>
+                <div class="input-actions" style="top:4px;">
+                    <button class="action-btn" onclick="copyField('myHybridFingerprint')" title="Копировать">📋</button>
+                </div>
+            </div>
+
+            <label>Ваш публичный ключ (передайте собеседнику):</label>
+            <div class="input-wrapper">
+                <textarea id="myHybridPublicKey" readonly></textarea>
                 <div class="input-actions">
-                    <button class="action-btn" onclick="pasteToField('friendHybridPublicKey')" title="Вставить">📥</button>
-                    <button class="action-btn" onclick="clearField('friendHybridPublicKey')" title="Очистить">🗑️</button>
+                    <button class="action-btn" onclick="copyField('myHybridPublicKey')" title="Копировать">📋</button>
                 </div>
             </div>
-
-            <div class="comparison-section" id="friendHybridVerification" style="display: none;">
-                <h4>🔍 Проверка подлинности (Защита от MITM)</h4>
-                <div><strong>Отпечаток собеседника (вычислен):</strong></div>
-                <div class="fingerprint" id="friendHybridFingerprint">—</div>
-                <label>Отпечаток, который прислал собеседник:</label>
-                <div class="input-wrapper">
-                    <input type="text" id="friendProvidedHybridFingerprint" placeholder="Вставьте отпечаток для сверки..." />
-                    <div class="input-actions">
-                        <button class="action-btn" onclick="pasteToField('friendProvidedHybridFingerprint')" title="Вставить">📥</button>
-                    </div>
-                </div>
-                <button id="verifyHybridFingerprintBtn">✅ Сравнить отпечатки</button>
-                <div id="hybridFingerprintMatch" style="display: none;">
-                    <div style="color: #28a745; font-weight: bold; margin: 10px 0;">✅ Отпечатки совпадают!</div>
-                </div>
-                <div id="hybridFingerprintMismatch" style="display: none;">
-                    <div style="color: #dc3545; font-weight: bold; margin: 10px 0;">❌ Отпечатки НЕ совпадают!</div>
-                </div>
-            </div>
-
-            <button id="establishConnectionBtn">🔑 Установить соединение</button>
-
-            <!-- Блок для обмена Ciphertext, появляется после нажатия "Установить" -->
-            <div id="ciphertextSection" class="hybrid-ciphertext-container" style="display: none;">
-                
-                <!-- Если пользователь определен как инициатор -->
-                <div id="initiatorBlock" style="display: none;">
-                    <h4 style="margin-top: 0;">📤 Отправьте код подтверждения</h4>
-                    <p style="font-size: 13px; opacity: 0.9;">Вы определены как Инициатор соединения. Для завершения ML-KEM обмена передайте этот код собеседнику.</p>
-                    <div class="input-wrapper">
-                        <textarea id="mlKemCiphertextOutput" readonly style="min-height: 80px;"></textarea>
-                        <div class="input-actions">
-                            <button class="action-btn" onclick="copyField('mlKemCiphertextOutput')" title="Копировать">📋</button>
-                        </div>
-                    </div>
-                    <div class="status success" style="margin-top: 10px;">✅ Ваш чат готов к работе. Перейдите во вкладку "Чат".</div>
-                </div>
-
-                <!-- Если пользователь определен как принимающий -->
-                <div id="responderBlock" style="display: none;">
-                    <h4 style="margin-top: 0;">📥 Вставьте код подтверждения</h4>
-                    <p style="font-size: 13px; opacity: 0.9;">Попросите инициатора прислать вам Код подтверждения (Ciphertext) и вставьте его сюда.</p>
-                    <div class="input-wrapper">
-                        <textarea id="mlKemCiphertextInput" placeholder="Вставьте код..." style="min-height: 80px;"></textarea>
-                        <div class="input-actions">
-                            <button class="action-btn" onclick="pasteToField('mlKemCiphertextInput')" title="Вставить">📥</button>
-                            <button class="action-btn" onclick="clearField('mlKemCiphertextInput')" title="Очистить">🗑️</button>
-                        </div>
-                    </div>
-                    <button id="btnCompleteResponder" onclick="completeResponderConnection(this)" style="margin-top: 10px;">🔐 Завершить настройку</button>
-                </div>
-            </div>
+            <div class="status success" style="margin-top:8px;">✅ Ключ скопирован в буфер обмена. Перешлите его собеседнику.</div>
         </div>
+        <button class="btn-success" onclick="goToStep(2)" style="margin-top:10px;">➡️ Продолжить</button>
+    </div>
+</div>
 
-        <div class="card">
-            <details>
-                <summary style="cursor: pointer; font-weight: 600; padding: 8px 0; user-select: none;">
-                    🔧 Технические подробности (PQC + Patched Ratchet)
-                </summary>
-                <div class="key-info" style="margin-top: 8px;">
-                    <strong>Криптографические детали:</strong><br>
-                    • Генерация: Один буфер 1216 байт = [32 байта X25519] + [1184 байта ML-KEM-768]<br>
-                    • Обмен ключами (Шаг 1): Асинхронный обмен единой Base64-строкой<br>
-                    • ML-KEM Ciphertext (Шаг 2): Инициатор генерирует и пересылает 1088 байт<br>
-                    • Гибридный миксинг: BLAKE2b — Final = H(S_X25519 || S_MLKEM768), 32 байта<br>
-                    • Шифрование: XChaCha20-Poly1305 с гибридным корневым ключом Double Ratchet<br>
-                    • Envelope v4: Метаданные (Reply, Файлы) полностью скрыты внутри XChaCha20 payload<br>
-                    • Изолированные ключи шифрования (защита памяти внутри WebAssembly)<br>
-                    • Подписи: Ed25519 (Web Crypto API, неизвлекаемые ключи)<br>
-                    • Отпечатки: SHA-512 → Base64URL (96 бит) + 6 эмодзи (30 бит энтропии)
-                </div>
-            </details>
+<!-- ===================================================================== -->
+<!-- ШАГ 2: Ключ собеседника + установка соединения                        -->
+<!-- ===================================================================== -->
+<div class="step-card" id="step2">
+    <h2>🤝 Шаг 2. Ключ собеседника</h2>
+    <div class="sub">Вставьте публичный ключ, который вам передал собеседник.</div>
+
+    <label>Публичный ключ собеседника:</label>
+    <div class="input-wrapper">
+        <textarea id="friendHybridPublicKey" placeholder="Вставьте ключ собеседника..." oninput="updateFriendHybridFingerprint()"></textarea>
+        <div class="input-actions">
+            <button class="action-btn" onclick="pasteToField('friendHybridPublicKey')" title="Вставить">📥</button>
+            <button class="action-btn" onclick="clearField('friendHybridPublicKey')" title="Очистить">🗑️</button>
         </div>
     </div>
-    
-    <!-- ==================== Вкладка подписей Ed25519 ==================== -->
-    <div id="signatures" class="tab-content">
-        <div class="card">
-            <h3>✍️ Подписи сообщений</h3>
-            <div class="security-notice">
-                <strong>🛡️ Зачем это нужно?</strong> Подпись доказывает, что сообщение написали именно вы.
+
+    <div class="comparison-section" id="friendHybridVerification" style="display:none;">
+        <h4>🔍 Отпечаток ключа собеседника</h4>
+        <div class="fingerprint" id="friendHybridFingerprint">—</div>
+    </div>
+
+    <button id="establishConnectionBtn" style="width:100%; margin-top:10px;">🔑 Установить соединение</button>
+
+    <!-- Блок обмена шифротекстом -->
+    <div id="ciphertextSection" class="hybrid-ciphertext-container" style="display:none; margin-top:16px;">
+        <div id="initiatorBlock" style="display:none;">
+            <h4 style="margin-top:0;">📤 Передайте код собеседнику</h4>
+            <p style="font-size:13px; opacity:0.9;">Скопируйте этот код и отправьте его собеседнику для завершения настройки.</p>
+            <div class="input-wrapper">
+                <textarea id="mlKemCiphertextOutput" readonly style="min-height:70px;"></textarea>
+                <div class="input-actions">
+                    <button class="action-btn" onclick="copyField('mlKemCiphertextOutput')" title="Копировать">📋</button>
+                </div>
+            </div>
+            <div class="status success" style="margin-top:8px;">✅ Код готов. Перешлите его собеседнику.</div>
+        </div>
+        <div id="responderBlock" style="display:none;">
+            <h4 style="margin-top:0;">📥 Вставьте код от собеседника</h4>
+            <p style="font-size:13px; opacity:0.9;">Попросите собеседника прислать код подтверждения и вставьте его сюда.</p>
+            <div class="input-wrapper">
+                <textarea id="mlKemCiphertextInput" placeholder="Вставьте код..." style="min-height:70px;"></textarea>
+                <div class="input-actions">
+                    <button class="action-btn" onclick="pasteToField('mlKemCiphertextInput')" title="Вставить">📥</button>
+                    <button class="action-btn" onclick="clearField('mlKemCiphertextInput')" title="Очистить">🗑️</button>
+                </div>
+            </div>
+            <button id="btnCompleteResponder" onclick="completeResponderConnection(this)" style="margin-top:10px;">🔐 Завершить настройку</button>
+        </div>
+    </div>
+
+    <div id="connectionDoneMsg" style="display:none; margin-top:12px;">
+        <div class="status success">✅ Соединение установлено! Переходите к проверке собеседника.</div>
+        <button class="btn-success" onclick="goToStep(4)" style="margin-top:10px;">➡️ Проверить собеседника</button>
+    </div>
+</div>
+
+<!-- ===================================================================== -->
+<!-- ШАГ 4: Проверка собеседника (выбор метода)                            -->
+<!-- ===================================================================== -->
+<div class="step-card" id="step4">
+    <h2>🛡️ Шаг 4. Проверка собеседника</h2>
+    <div class="sub">Выберите способ убедиться, что вы общаетесь именно с тем человеком.</div>
+
+    <div class="verification-choice">
+        <button id="choiceFingerprint" onclick="selectVerification('fingerprint')">
+            <span class="icon">🔍</span>
+            По отпечаткам
+            <small style="display:block;font-weight:400;opacity:0.7;font-size:12px;">Сравните короткие коды</small>
+        </button>
+        <button id="choiceSignatures" onclick="selectVerification('signatures')">
+            <span class="icon">✍️</span>
+            По подписям
+            <small style="display:block;font-weight:400;opacity:0.7;font-size:12px;">Цифровые подписи</small>
+        </button>
+    </div>
+
+    <!-- Панель: проверка по отпечаткам -->
+    <div id="verificationFingerprintPanel" style="display:none;">
+        <div class="verification-section">
+            <h4>🔍 Сравните отпечатки</h4>
+            <p style="font-size:14px;opacity:0.8;">Попросите собеседника показать отпечаток его ключа и вставьте его ниже.</p>
+            <div><strong>Отпечаток собеседника (вычислен):</strong></div>
+            <div class="fingerprint" id="friendHybridFingerprint2">—</div>
+            <label>Отпечаток, который прислал собеседник:</label>
+            <div class="input-wrapper">
+                <input type="text" id="friendProvidedHybridFingerprint" placeholder="Вставьте отпечаток..." />
+                <div class="input-actions">
+                    <button class="action-btn" onclick="pasteToField('friendProvidedHybridFingerprint')" title="Вставить">📥</button>
+                </div>
+            </div>
+            <button id="verifyHybridFingerprintBtn">✅ Сравнить</button>
+            <div id="hybridFingerprintMatch" style="display:none;">
+                <div style="color:#28a745; font-weight:bold; margin:10px 0;">✅ Отпечатки совпадают!</div>
+            </div>
+            <div id="hybridFingerprintMismatch" style="display:none;">
+                <div style="color:#dc3545; font-weight:bold; margin:10px 0;">❌ Отпечатки НЕ совпадают!</div>
             </div>
         </div>
+        <div id="fpVerifyDoneMsg" style="display:none;">
+            <div class="status success">✅ Проверка по отпечаткам пройдена!</div>
+            <button class="btn-success" onclick="goToStep(5)" style="margin-top:10px;">💬 Перейти в чат</button>
+        </div>
+    </div>
 
-        <div class="row">
-            <div class="card">
-                <h3>🔑 Мои ключи подписи</h3>
-                <button id="generateEd25519Keys" onclick="generateEd25519KeyPair()">Сгенерировать ключи Ed25519</button>
-
-                <div class="verification-section" id="ed25519KeysGenerated" style="display: none;">
-                    <label>Мой публичный ключ подписи (отправьте собеседнику):</label>
+    <!-- Панель: проверка по подписям -->
+    <div id="verificationSignaturesPanel" style="display:none;">
+        <div class="card-row">
+            <div class="verification-section">
+                <h4>✍️ Ваш ключ подписи</h4>
+                <button id="generateEd25519Keys" onclick="generateEd25519KeyPair()" style="width:100%;">Создать ключ подписи</button>
+                <div id="ed25519KeysGenerated" style="display:none; margin-top:8px;">
+                    <label>Ваш публичный ключ (передайте собеседнику):</label>
                     <div class="input-wrapper">
                         <textarea id="myEd25519PublicKey" readonly></textarea>
                         <div class="input-actions">
                             <button class="action-btn" onclick="copyField('myEd25519PublicKey')" title="Копировать">📋</button>
                         </div>
                     </div>
-
-                    <label>Мой приватный ключ (для бэкапа):</label>
-                    <div class="input-wrapper">
-                        <button id="exportPrivateKeyBtn">Экспортировать приватный ключ</button>
-                    </div>
-                    <small>⚠️ Ключ копируется в буфер обмена на 30 секунд</small>
+                    <label>Отпечаток:</label>
+                    <div class="fingerprint" id="myEd25519Fingerprint">—</div>
+                    <div class="status info" id="ed25519MyStatus">Ключи подписи не сгенерированы</div>
                 </div>
-
-                <div style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+                <div style="margin-top:12px; border-top:1px solid var(--border-color); padding-top:12px;">
                     <h4>📥 Импорт приватного ключа</h4>
                     <div class="input-wrapper">
-                        <textarea id="ed25519PrivateKeyImport" placeholder="Вставьте приватный ключ Ed25519..." style="min-height: 60px;"></textarea>
+                        <textarea id="ed25519PrivateKeyImport" placeholder="Вставьте приватный ключ..." style="min-height:50px;"></textarea>
                         <div class="input-actions">
                             <button class="action-btn" onclick="pasteToField('ed25519PrivateKeyImport')" title="Вставить">📥</button>
                             <button class="action-btn" onclick="clearField('ed25519PrivateKeyImport')" title="Очистить">🗑️</button>
@@ -768,40 +805,24 @@
                     </div>
                     <button id="importEd25519PrivateKey" onclick="importEd25519PrivateKey()">Импортировать</button>
                 </div>
-
-                <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border-color);">
-                    <h4>🔍 Отпечаток моего ключа подписи:</h4>
-                    <div class="input-wrapper">
-                        <div class="fingerprint" id="myEd25519Fingerprint">—</div>
-                        <div class="input-actions" style="top: 4px;">
-                            <button class="action-btn" onclick="copyField('myEd25519Fingerprint')" title="Копировать">📋</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="status info" id="ed25519MyStatus">Ключи подписи не сгенерированы</div>
             </div>
 
-            <div class="card">
-                <h3>👤 Ключ подписи собеседника</h3>
+            <div class="verification-section">
+                <h4>👤 Ключ подписи собеседника</h4>
                 <label>Публичный ключ подписи собеседника:</label>
                 <div class="input-wrapper">
-                    <textarea id="friendEd25519PublicKey" placeholder="Вставьте публичный ключ подписи..." style="min-height: 60px;" oninput="updateFriendEd25519Fingerprint()"></textarea>
+                    <textarea id="friendEd25519PublicKey" placeholder="Вставьте публичный ключ..." style="min-height:50px;" oninput="updateFriendEd25519Fingerprint()"></textarea>
                     <div class="input-actions">
                         <button class="action-btn" onclick="pasteToField('friendEd25519PublicKey')" title="Вставить">📥</button>
                         <button class="action-btn" onclick="clearField('friendEd25519PublicKey')" title="Очистить">🗑️</button>
                     </div>
                 </div>
-                <button id="importFriendEd25519Key" onclick="importFriendEd25519Key()">Установить ключ собеседника</button>
+                <button id="importFriendEd25519Key" onclick="importFriendEd25519Key()">Установить ключ</button>
 
-                <div class="comparison-section" id="friendEd25519Verification" style="display: none;">
+                <div class="comparison-section" id="friendEd25519Verification" style="display:none; margin-top:10px;">
                     <h4>🔍 Сверка отпечатков</h4>
-                    <div><strong>Отпечаток (вычислен):</strong></div>
-                    <div class="input-wrapper">
-                        <div class="fingerprint" id="friendEd25519Fingerprint">—</div>
-                        <div class="input-actions" style="top: 4px;">
-                            <button class="action-btn" onclick="copyField('friendEd25519Fingerprint')" title="Копировать">📋</button>
-                        </div>
-                    </div>
+                    <div><strong>Отпечаток собеседника:</strong></div>
+                    <div class="fingerprint" id="friendEd25519Fingerprint">—</div>
                     <label>Отпечаток от собеседника:</label>
                     <div class="input-wrapper">
                         <input type="text" id="friendProvidedEd25519Fingerprint" placeholder="Вставьте отпечаток..." />
@@ -810,74 +831,87 @@
                             <button class="action-btn" onclick="clearField('friendProvidedEd25519Fingerprint')" title="Очистить">🗑️</button>
                         </div>
                     </div>
-                    <button onclick="verifyEd25519Fingerprint()">Проверить отпечаток</button>
-                    <div id="ed25519FingerprintMatch" style="display: none;">
-                        <div style="color: #28a745; font-weight: bold; margin: 10px 0;">✅ Совпадают!</div>
+                    <button onclick="verifyEd25519Fingerprint()">Проверить</button>
+                    <div id="ed25519FingerprintMatch" style="display:none;">
+                        <div style="color:#28a745; font-weight:bold; margin:10px 0;">✅ Совпадают!</div>
                     </div>
-                    <div id="ed25519FingerprintMismatch" style="display: none;">
-                        <div style="color: #dc3545; font-weight: bold; margin: 10px 0;">❌ НЕ совпадают!</div>
+                    <div id="ed25519FingerprintMismatch" style="display:none;">
+                        <div style="color:#dc3545; font-weight:bold; margin:10px 0;">❌ НЕ совпадают!</div>
                     </div>
                 </div>
-                <div class="status info" id="ed25519FriendStatus">Ключ подписи собеседника не установлен</div>
+                <div class="status info" id="ed25519FriendStatus" style="margin-top:8px;">Ключ подписи собеседника не установлен</div>
+            </div>
+        </div>
+        <div id="sigVerifyDoneMsg" style="display:none; margin-top:12px;">
+            <div class="status success">✅ Проверка по подписям пройдена!</div>
+            <button class="btn-success" onclick="goToStep(5)" style="margin-top:10px;">💬 Перейти в чат</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================================================================== -->
+<!-- ШАГ 5: Чат                                                            -->
+<!-- ===================================================================== -->
+<div class="step-card" id="step5">
+    <h2>💬 Шаг 5. Защищённый чат</h2>
+    <div class="sub">Все сообщения шифруются автоматически. Отправляйте текст, файлы и голосовые.</div>
+
+    <div class="chat-container">
+        <div class="chat-header">
+            <div>
+                <h3>💬 Чат</h3>
+                <div class="chat-header-status" id="chatHeaderStatus">🔒 Защищённое соединение</div>
+            </div>
+            <button class="msg-action-btn" onclick="clearChat()" style="color:white;background:rgba(255,255,255,0.2);">🗑️ Очистить</button>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="chat-empty">
+                <div class="chat-empty-icon">💬</div>
+                <div class="chat-empty-text">Чат готов. Напишите сообщение!</div>
+            </div>
+        </div>
+
+        <div class="chat-reply-bar" id="chatReplyBar">
+            <div class="chat-reply-bar-content">
+                <div class="chat-reply-bar-sender" id="replyBarSender"></div>
+                <div class="chat-reply-bar-text" id="replyBarText"></div>
+            </div>
+            <button class="chat-reply-bar-close" onclick="cancelReply()">✕</button>
+        </div>
+
+        <div class="chat-file-preview" id="chatFilePreview">
+            <span>📎</span>
+            <span id="chatFilePreviewName" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+            <span id="chatFilePreviewSize" style="opacity:0.6;font-size:11px;"></span>
+            <button class="chat-file-preview-close" onclick="clearAttachedFile()">✕</button>
+        </div>
+
+        <div class="chat-input-area">
+            <button class="chat-attach-btn" onclick="document.getElementById('chatFileInput').click()" title="Прикрепить файл">📎</button>
+            <input type="file" id="chatFileInput" style="display:none;">
+            <button class="chat-attach-btn" id="btnVoiceRecord" onclick="toggleVoiceRecord()" title="Записать голосовое">🎤</button>
+
+            <div class="chat-input-wrapper">
+                <textarea class="chat-input" id="chatInput" placeholder="Введите сообщение..." rows="1"></textarea>
+            </div>
+
+            <div class="chat-send-btns">
+                <button class="chat-send-btn chat-encrypt-btn" id="btnEncrypt" title="Зашифровать и отправить" onclick="chatEncrypt()">🔒</button>
+                <button class="chat-send-btn chat-decrypt-btn" id="btnDecrypt" title="Расшифровать вставленное" onclick="chatDecrypt()">🔓</button>
             </div>
         </div>
     </div>
+</div>
 
-    <!-- ==================== Вкладка ЧАТ ==================== -->
-    <div id="chat" class="tab-content">
-        <div class="chat-container">
-            <div class="chat-header">
-                <div>
-                    <h3>💬 Защищённый чат</h3>
-                    <div class="chat-header-status" id="chatHeaderStatus">🔒 Ключ не установлен</div>
-                </div>
-                <button class="msg-action-btn" onclick="clearChat()" style="color: white; background: rgba(255,255,255,0.2);">🗑️ Очистить</button>
-            </div>
-
-            <div class="chat-messages" id="chatMessages">
-                <div class="chat-empty">
-                    <div class="chat-empty-icon">🔐</div>
-                    <div class="chat-empty-text">Установите гибридный ключ на вкладке «Обмен ключами»</div>
-                </div>
-            </div>
-
-            <div class="chat-reply-bar" id="chatReplyBar">
-                <div class="chat-reply-bar-content">
-                    <div class="chat-reply-bar-sender" id="replyBarSender"></div>
-                    <div class="chat-reply-bar-text" id="replyBarText"></div>
-                </div>
-                <button class="chat-reply-bar-close" onclick="cancelReply()">✕</button>
-            </div>
-
-            <div class="chat-file-preview" id="chatFilePreview">
-                <span>📎</span>
-                <span id="chatFilePreviewName" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
-                <span id="chatFilePreviewSize" style="opacity:0.6; font-size:11px;"></span>
-                <button class="chat-file-preview-close" onclick="clearAttachedFile()">✕</button>
-            </div>
-
-            <div class="chat-input-area">
-                <button class="chat-attach-btn" onclick="document.getElementById('chatFileInput').click()" title="Прикрепить файл">📎</button>
-                <input type="file" id="chatFileInput" style="display:none;">
-                <button class="chat-attach-btn" id="btnVoiceRecord" onclick="toggleVoiceRecord()" title="Записать голосовое">🎤</button>
-
-                <div class="chat-input-wrapper">
-                    <textarea class="chat-input" id="chatInput" placeholder="Введите сообщение или вставьте шифротекст..." rows="1"></textarea>
-                </div>
-
-                <div class="chat-send-btns">
-                    <button class="chat-send-btn chat-encrypt-btn" id="btnEncrypt" title="Зашифровать" onclick="chatEncrypt()">🔒</button>
-                    <button class="chat-send-btn chat-decrypt-btn" id="btnDecrypt" title="Расшифровать" onclick="chatDecrypt()">🔓</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="destroy-section">
-        <h3>⚠️ Уничтожение данных</h3>
-        <p>Безвозвратно удаляет все ключи, сообщения и файлы из памяти</p>
-        <button class="btn-danger" onclick="destroyAllData()">🔥 Уничтожить все данные</button>
-    </div>
+<!-- ===================================================================== -->
+<!-- КНОПКА УНИЧТОЖЕНИЯ (всегда внизу)                                     -->
+<!-- ===================================================================== -->
+<div class="destroy-section">
+    <h3>⚠️ Уничтожение данных</h3>
+    <p>Безвозвратно удаляет все ключи, сообщения и файлы из памяти.</p>
+    <button class="btn-danger" onclick="destroyAllData()">🔥 Уничтожить все данные</button>
+</div>
 
 <script>
 // =====================================================================
@@ -899,21 +933,21 @@ function secureZero(obj) {
 let currentSymmetricKey = null;
 let derivedAesKeyRaw = null;
 
-// Hybrid keys (X25519 + ML-KEM)
-let myKxKeyPair = null;          
-let myMlKemKeyPair = null;       
-let myCombinedPublicKeyBuf = null; 
+// Hybrid keys
+let myKxKeyPair = null;
+let myMlKemKeyPair = null;
+let myCombinedPublicKeyBuf = null;
 let myHybridFingerprintStr = '';
 
-let isInitiatorRole = null; 
-let pqcSharedSecret = null;     
-let mlKemCiphertext = null;     
+let isInitiatorRole = null;
+let pqcSharedSecret = null;
+let mlKemCiphertext = null;
 let isMlKemReady = false;
 
-// Временное хранение классического секрета до инкапсуляции
 let tempSClassic = null;
 let tempFriendX25519Pk = null;
 
+// Ed25519
 let myEd25519PrivateKey = null;
 let myEd25519PublicKeyRaw = null;
 let myEd25519PrivateKeyPkcs8 = null;
@@ -921,13 +955,13 @@ let friendEd25519PublicKeyRaw = null;
 let ed25519SigningEnabled = false;
 let ed25519VerifyEnabled = false;
 
-// Переменные чата (v5.1.1 Engine)
+// Chat
 let chatMessageCounter = 0;
 let chatAttachedFile = null;
-let replyToGlobalId = null;       // Глобальный ID (UUID) вместо локального
-const globalToLocalMap = new Map(); // Связка: globalId -> localMsgId (для авто-скролла)
-let mediaObjectUrls = [];         
-const replyInfoCache = new Map(); // gId -> { sender, preview, exists }
+let replyToGlobalId = null;
+const globalToLocalMap = new Map();
+const replyInfoCache = new Map();
+let mediaObjectUrls = [];
 
 const AAD_MESSAGE = te.encode("SecureMessenger-MSG");
 const AAD_FILE = te.encode("SecureMessenger-FILE");
@@ -941,7 +975,7 @@ const MAX_FUTURE_TOLERANCE_MS = 60 * 1000;
 const themeNames = { cream:'Кремовая', dark:'Тёмная', rose:'Розовая', ocean:'Океан', forest:'Лесная', midnight:'Полночь'};
 
 // =====================================================================
-// УТИЛИТЫ И DOUBLE RATCHET
+// УТИЛИТЫ
 // =====================================================================
 const Ratchet = {
     state: { RK: null, CKs: null, CKr: null, DHs: null, DHr: null, Ns: 0, Nr: 0, PN: 0, skipped: {} },
@@ -965,8 +999,8 @@ const Ratchet = {
             this.state.DHr = friendStaticPubX25519;
             const dh_out = sodium.crypto_scalarmult(this.state.DHs.privateKey, this.state.DHr);
             const kdf = this.KDF_RK(this.state.RK, dh_out);
-            secureZero(this.state.RK); // Очистка исходного RK
-            secureZero(dh_out);        // Очистка временного секрета DH
+            secureZero(this.state.RK);
+            secureZero(dh_out);
             this.state.RK = kdf.RK;
             this.state.CKs = kdf.CK;
         } else {
@@ -975,9 +1009,9 @@ const Ratchet = {
     },
 
     ratchetEncrypt: function() {
-        if (!this.state.CKs) throw new Error("Подождите, пока Инициатор пришлет первое сообщение.");
+        if (!this.state.CKs) throw new Error("Подождите, пока собеседник пришлёт первое сообщение.");
         const kdf = this.KDF_CK(this.state.CKs);
-        secureZero(this.state.CKs); // Обнуление старого CKs
+        secureZero(this.state.CKs);
         this.state.CKs = kdf.CK;
         const header = { dh: arrayBufferToBase64(this.state.DHs.publicKey), n: this.state.Ns, pn: this.state.PN };
         this.state.Ns++;
@@ -1006,7 +1040,7 @@ const Ratchet = {
 
         this.skipMessageKeys(tempState, header.n);
         const kdf = this.KDF_CK(tempState.CKr);
-        secureZero(tempState.CKr); // Обнуление временного CKr
+        secureZero(tempState.CKr);
         tempState.CKr = kdf.CK;
         tempState.Nr++;
         return { mk: kdf.MK, tentativeState: tempState, skipKeyToRemove: null };
@@ -1024,9 +1058,9 @@ const Ratchet = {
         secureZero(dh_out);
         secureZero(state.RK);
         state.RK = kdf.RK; state.CKr = kdf.CK;
-        
+
         state.DHs = sodium.crypto_kx_keypair();
-        
+
         dh_out = sodium.crypto_scalarmult(state.DHs.privateKey, state.DHr);
         kdf = this.KDF_RK(state.RK, dh_out);
         secureZero(dh_out);
@@ -1039,7 +1073,7 @@ const Ratchet = {
         if (state.CKr != null) {
             while (state.Nr < until_n) {
                 const kdf = this.KDF_CK(state.CKr);
-                secureZero(state.CKr); // Обнуляем пропущенные CK
+                secureZero(state.CKr);
                 state.CKr = kdf.CK;
                 const skipKey = arrayBufferToBase64(state.DHr) + '_' + state.Nr;
                 state.skipped[skipKey] = kdf.MK;
@@ -1051,7 +1085,7 @@ const Ratchet = {
 
 function arrayBufferToBase64(buffer) {
     const bytes = new Uint8Array(buffer);
-    const CHUNK_SIZE = 0x8000; 
+    const CHUNK_SIZE = 0x8000;
     let binary = '';
     for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
         const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.length));
@@ -1082,8 +1116,8 @@ function extractTimestamp(b) {
 }
 function validateMessageTime(msgTs) {
     const now = Date.now(), age = now - msgTs;
-    if (msgTs > now + MAX_FUTURE_TOLERANCE_MS) return { valid:false, warning:true, reason:'future', message:`⚠️ Из будущего` };
-    if (age > MAX_MESSAGE_AGE_MS) return { valid:true, warning:true, reason:'old', message:`⚠️ Старое` };
+    if (msgTs > now + MAX_FUTURE_TOLERANCE_MS) return { valid:false, warning:true, reason:'future', message:'⚠️ Из будущего' };
+    if (age > MAX_MESSAGE_AGE_MS) return { valid:true, warning:true, reason:'old', message:'⚠️ Старое' };
     return { valid:true, warning:false };
 }
 function formatTime(date) { return date.getHours().toString().padStart(2,'0') + ':' + date.getMinutes().toString().padStart(2,'0'); }
@@ -1139,228 +1173,50 @@ function getFileIconEmoji(type) {
 // =====================================================================
 let noblePqModule = null;
 async function getNobleMlKem() {
-    if (window.noblePqc) {
-        return window.noblePqc;
-    }
-    throw new Error('Не удалось найти локальный модуль @noble/post-quantum. Проверьте подключение noble-pqc.js в index.html');
+    if (window.noblePqc) return window.noblePqc;
+    throw new Error('Не удалось найти локальный модуль @noble/post-quantum. Проверьте подключение noble-pqc.js');
 }
 
 // =====================================================================
-// ГИБРИДНЫЙ ОБМЕН КЛЮЧАМИ (Combined Generation)
+// УПРАВЛЕНИЕ ШАГАМИ
 // =====================================================================
-document.getElementById('generateHybridKeysBtn').addEventListener('click', async () => {
-    try {
-        await sodium.ready;
-        const { ml_kem768 } = await getNobleMlKem();
+function goToStep(step) {
+    document.querySelectorAll('.step-card').forEach(el => el.classList.remove('active'));
+    document.getElementById('step' + step).classList.add('active');
 
-        myKxKeyPair = sodium.crypto_kx_keypair();
-        myMlKemKeyPair = ml_kem768.keygen();
+    document.querySelectorAll('.step-dot').forEach(el => {
+        const s = parseInt(el.dataset.step);
+        el.classList.remove('active', 'done');
+        if (s === step) el.classList.add('active');
+        else if (s < step) el.classList.add('done');
+    });
 
-        const combined = new Uint8Array(32 + 1184);
-        combined.set(new Uint8Array(myKxKeyPair.publicKey), 0);
-        combined.set(myMlKemKeyPair.publicKey, 32);
-
-        myCombinedPublicKeyBuf = combined.buffer;
-        
-        document.getElementById('myHybridPublicKey').value = arrayBufferToBase64(myCombinedPublicKeyBuf);
-        myHybridFingerprintStr = await generateFingerprint(myCombinedPublicKeyBuf);
-        document.getElementById('myHybridFingerprint').textContent = myHybridFingerprintStr;
-        
-        showStatus('success', '🧬 Гибридные ключи сгенерированы (X25519 + ML-KEM)!');
-    } catch(e) { showStatus('error', 'Ошибка генерации: ' + e.message); }
-});
-
-async function updateFriendHybridFingerprint() {
-    const b64 = document.getElementById('friendHybridPublicKey').value.trim();
-    const block = document.getElementById('friendHybridVerification');
-    const fp = document.getElementById('friendHybridFingerprint');
-    
-    block.style.display = 'none'; fp.textContent = '—';
-    document.getElementById('hybridFingerprintMatch').style.display = 'none';
-    document.getElementById('hybridFingerprintMismatch').style.display = 'none';
-    if (!b64) return;
-    
-    try {
-        const buf = base64ToArrayBuffer(b64);
-        if (buf.byteLength !== (32 + 1184)) { // 1216
-            fp.textContent = '❌ Неверный размер ключа (должен быть 1216 байт)';
-            block.style.display = 'block'; return;
-        }
-        fp.textContent = await generateFingerprint(buf);
-        block.style.display = 'block';
-    } catch(e) { 
-        fp.textContent = '❌ Ошибка чтения Base64'; 
-        block.style.display = 'block'; 
-    }
-}
-
-document.getElementById('verifyHybridFingerprintBtn').addEventListener('click', () => {
-    const computed = document.getElementById('friendHybridFingerprint').textContent||'';
-    const provided = document.getElementById('friendProvidedHybridFingerprint').value.trim();
-    if (computed==='—') { alert('Сначала вставьте ключ собеседника'); return; }
-    if (!provided) { alert('Вставьте отпечаток собеседника'); return; }
-    
-    const m = document.getElementById('hybridFingerprintMatch');
-    const mm = document.getElementById('hybridFingerprintMismatch');
-    
-    if (provided.replace(/\s+/g,'') === computed.replace(/\s+/g,'')) {
-        m.style.display='block'; mm.style.display='none'; showStatus('success','Отпечатки совпадают!');
-    } else {
-        m.style.display='none'; mm.style.display='block'; showStatus('error','Отпечатки НЕ совпадают!');
-    }
-});
-
-// Установка соединения (Вычисление ролей и инкапсуляция)
-document.getElementById('establishConnectionBtn').addEventListener('click', async () => {
-    try {
-        await sodium.ready;
-        if (!myCombinedPublicKeyBuf || !myKxKeyPair || !myMlKemKeyPair) {
-            showStatus('error', 'Сначала сгенерируйте свои ключи!'); return;
-        }
-        
-        const friendB64 = document.getElementById('friendHybridPublicKey').value.trim();
-        if (!friendB64) { showStatus('error', 'Вставьте ключ собеседника'); return; }
-        
-        const friendBuf = base64ToArrayBuffer(friendB64);
-        if (friendBuf.byteLength !== 1216) {
-            showStatus('error', 'Неверный формат ключа собеседника (ожидается 1216 байт)'); return;
-        }
-
-        const friendX25519Pk = new Uint8Array(friendBuf.slice(0, 32));
-        
-        // ВАЖНО: Проверяем, чтобы публичный ключ не состоял только из нулей
-        if (friendX25519Pk.every(b => b === 0)) {
-            showStatus('error', 'Критическая ошибка: недопустимый ключ X25519 (состоит из нулей)');
-            return;
-        }
-
-        const friendMlKemPk = new Uint8Array(friendBuf.slice(32, 1216));
-
-        // Вычисляем классический секрет
-        const sClassic = sodium.crypto_scalarmult(myKxKeyPair.privateKey, friendX25519Pk);
-
-        // ВАЖНО: Проверка на точку малого порядка
-        if (sClassic.every(b => b === 0)) {
-            showStatus('error', 'Критическая ошибка: слабая точка X25519 (small subgroup)! Соединение прервано.');
-            secureZero(sClassic);
-            return;
-        }
-        
-        const myX25519Pk = new Uint8Array(myKxKeyPair.publicKey);
-        let cmp = 0;
-        for (let i = 0; i < 32; i++) {
-            if (myX25519Pk[i] < friendX25519Pk[i]) { cmp = -1; break; }
-            else if (myX25519Pk[i] > friendX25519Pk[i]) { cmp = 1; break; }
-        }
-        
-        isInitiatorRole = cmp < 0;
-        tempSClassic = sClassic;
-        tempFriendX25519Pk = friendX25519Pk;
-
-        const { ml_kem768 } = await getNobleMlKem();
-        document.getElementById('ciphertextSection').style.display = 'block';
-
-        if (isInitiatorRole) {
-            // Инициатор: инкапсуляция ML-KEM
-            const result = ml_kem768.encapsulate(friendMlKemPk);
-            pqcSharedSecret = result.sharedSecret;
-            mlKemCiphertext = result.cipherText;
-            
-            // Вывод кода
-            document.getElementById('mlKemCiphertextOutput').value = arrayBufferToBase64(mlKemCiphertext.buffer);
-            document.getElementById('initiatorBlock').style.display = 'block';
-            document.getElementById('responderBlock').style.display = 'none';
-            
-            // Инициализируем сразу (мы инициатор)
-            finalizeHybridMix();
-            showStatus('success', '🔐 Вы Инициатор. Передайте код подтверждения.');
-        } else {
-            // Принимающий: ожидаем ввода кода подтверждения
-            document.getElementById('initiatorBlock').style.display = 'none';
-            document.getElementById('responderBlock').style.display = 'block';
-            showStatus('info', 'Вы Принимающий. Запросите код подтверждения у собеседника.');
-        }
-
-    } catch(e) { showStatus('error','Ошибка соединения: ' + e.message); }
-});
-
-// Завершение соединения принимающим
-async function completeResponderConnection(btn) {
-    if (btn && btn.disabled) return; // Защита от повторных нажатий
-    
-    if (btn) {
-        btn.disabled = true;
-        btn.originalText = btn.textContent;
-        btn.textContent = '⏳ Настройка...';
+    // Если переходим на шаг 5 (чат), обновляем статус
+    if (step === 5) {
+        updateChatHeader();
+        updateChatEmptyState();
     }
 
-    try {
-        const ctB64 = document.getElementById('mlKemCiphertextInput').value.trim();
-        if (!ctB64) throw new Error('Вставьте код подтверждения');
-
-        const ctBuf = new Uint8Array(base64ToArrayBuffer(ctB64));
-        if (ctBuf.byteLength !== 1088) { // Ciphertext for ML-KEM-768
-            throw new Error('Неверный размер кода подтверждения');
-        }
-
-        const { ml_kem768 } = await getNobleMlKem();
-        pqcSharedSecret = ml_kem768.decapsulate(ctBuf, myMlKemKeyPair.secretKey);
-        
-        finalizeHybridMix();
-        showStatus('success', '🧬 Гибридный ключ активирован! Переходите в чат.');
-        if (btn) btn.textContent = '✅ Завершено';
-    } catch(e) { 
-        showStatus('error', 'Ошибка деинкапсуляции: ' + e.message); 
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = btn.originalText || '🔐 Завершить настройку';
-        }
+    // Если переходим на шаг 4, обновляем отпечатки
+    if (step === 4) {
+        // Копируем отпечаток из шага 2
+        const fp1 = document.getElementById('friendHybridFingerprint');
+        const fp2 = document.getElementById('friendHybridFingerprint2');
+        if (fp1 && fp2) fp2.textContent = fp1.textContent;
+        // Обновляем Ed25519
+        updateFriendEd25519Fingerprint();
     }
-}
 
-// Финальный гибридный микс BLAKE2b(S_classic || S_pqc) -> Ratchet
-function finalizeHybridMix() {
-    const combined = new Uint8Array(tempSClassic.length + pqcSharedSecret.length);
-    combined.set(tempSClassic, 0);
-    combined.set(pqcSharedSecret, tempSClassic.length);
-
-    const finalKey = sodium.crypto_generichash(
-        sodium.crypto_aead_xchacha20poly1305_ietf_KEYBYTES,
-        combined
-    );
-
-    currentSymmetricKey = finalKey;
-    derivedAesKeyRaw = finalKey;
-
-    // Ratchet инициализируется X25519-частью ключа собеседника для правильной математики
-    Ratchet.init(currentSymmetricKey, isInitiatorRole, tempFriendX25519Pk, myKxKeyPair);
-
-    isMlKemReady = true;
-    updateChatEmptyState();
-    updateChatHeader();
-
-    // БЕЗОПАСНАЯ ОЧИСТКА ВРЕМЕННЫХ И ИСХОДНЫХ СЕКРЕТОВ ИЗ ПАМЯТИ
-    secureZero(combined);
-    if (tempSClassic) secureZero(tempSClassic);
-    if (pqcSharedSecret) secureZero(pqcSharedSecret);
-    if (mlKemCiphertext) secureZero(mlKemCiphertext);
-    
-    // Секретный ключ ML-KEM нужен был только для одной установки соединения
-    if (myMlKemKeyPair && myMlKemKeyPair.secretKey) {
-        secureZero(myMlKemKeyPair.secretKey);
-    }
-    
-    tempSClassic = null;
-    pqcSharedSecret = null;
-    mlKemCiphertext = null;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // =====================================================================
-// ТЕМЫ, UI и УТИЛИТЫ
+// ТЕМЫ
 // =====================================================================
 function toggleThemePanel() {
     const o = document.getElementById('theme-options');
-    o.classList.toggle('show'); document.getElementById('theme-arrow').textContent = o.classList.contains('show') ? '▲' : '▼';
+    o.classList.toggle('show');
+    document.getElementById('theme-arrow').textContent = o.classList.contains('show') ? '▲' : '▼';
 }
 function setTheme(name) {
     const html = document.documentElement; html.removeAttribute('data-theme');
@@ -1371,17 +1227,9 @@ function setTheme(name) {
 }
 function loadTheme() { setTheme(localStorage.getItem('theme') || 'cream'); }
 
-document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        tab.classList.add('active'); document.getElementById(tab.dataset.tab).classList.add('active');
-    });
-});
-
 function showStatus(type, message) {
     const d = document.createElement('div'); d.className = `status ${type}`; d.textContent = message;
-    Object.assign(d.style, { position:'fixed', top:'20px', left:'50%', transform:'translateX(-50%)', zIndex:'1001', minWidth:'300px', maxWidth:'90%', textAlign:'center', animation:'fadeIn 0.3s ease' });
+    Object.assign(d.style, { position:'fixed', top:'20px', left:'50%', transform:'translateX(-50%)', zIndex:'1001', minWidth:'280px', maxWidth:'90%', textAlign:'center', animation:'fadeIn 0.3s ease' });
     document.body.appendChild(d);
     setTimeout(() => { d.style.opacity='0'; d.style.transition='opacity 0.3s'; setTimeout(()=>d.remove(),300); }, 4000);
 }
@@ -1406,23 +1254,243 @@ function clearField(id) {
 }
 
 // =====================================================================
+// ГИБРИДНЫЙ ОБМЕН КЛЮЧАМИ
+// =====================================================================
+document.getElementById('generateHybridKeysBtn').addEventListener('click', async () => {
+    try {
+        await sodium.ready;
+        const { ml_kem768 } = await getNobleMlKem();
+
+        myKxKeyPair = sodium.crypto_kx_keypair();
+        myMlKemKeyPair = ml_kem768.keygen();
+
+        const combined = new Uint8Array(32 + 1184);
+        combined.set(new Uint8Array(myKxKeyPair.publicKey), 0);
+        combined.set(myMlKemKeyPair.publicKey, 32);
+
+        myCombinedPublicKeyBuf = combined.buffer;
+
+        document.getElementById('myHybridPublicKey').value = arrayBufferToBase64(myCombinedPublicKeyBuf);
+        myHybridFingerprintStr = await generateFingerprint(myCombinedPublicKeyBuf);
+        document.getElementById('myHybridFingerprint').textContent = myHybridFingerprintStr;
+
+        document.getElementById('myKeysDisplay').style.display = 'block';
+        document.getElementById('generateHybridKeysBtn').textContent = '✅ Ключ создан';
+
+        // Автокопирование публичного ключа
+        try {
+            await navigator.clipboard.writeText(document.getElementById('myHybridPublicKey').value);
+        } catch(e) {}
+
+        showStatus('success', '🔑 Ключ создан и скопирован в буфер обмена!');
+    } catch(e) { showStatus('error', 'Ошибка: ' + e.message); }
+});
+
+async function updateFriendHybridFingerprint() {
+    const b64 = document.getElementById('friendHybridPublicKey').value.trim();
+    const block = document.getElementById('friendHybridVerification');
+    const fp = document.getElementById('friendHybridFingerprint');
+    const fp2 = document.getElementById('friendHybridFingerprint2');
+
+    block.style.display = 'none'; fp.textContent = '—'; if (fp2) fp2.textContent = '—';
+    if (!b64) return;
+
+    try {
+        const buf = base64ToArrayBuffer(b64);
+        if (buf.byteLength !== 1216) {
+            fp.textContent = '❌ Неверный размер ключа (должен быть 1216 байт)';
+            block.style.display = 'block'; return;
+        }
+        const f = await generateFingerprint(buf);
+        fp.textContent = f;
+        if (fp2) fp2.textContent = f;
+        block.style.display = 'block';
+    } catch(e) {
+        fp.textContent = '❌ Ошибка чтения Base64';
+        block.style.display = 'block';
+    }
+}
+
+document.getElementById('verifyHybridFingerprintBtn').addEventListener('click', () => {
+    const computed = document.getElementById('friendHybridFingerprint').textContent || '';
+    const provided = document.getElementById('friendProvidedHybridFingerprint').value.trim();
+    if (computed === '—') { showStatus('error','Сначала вставьте ключ собеседника'); return; }
+    if (!provided) { showStatus('error','Вставьте отпечаток собеседника'); return; }
+
+    const m = document.getElementById('hybridFingerprintMatch');
+    const mm = document.getElementById('hybridFingerprintMismatch');
+
+    if (provided.replace(/\s+/g,'') === computed.replace(/\s+/g,'')) {
+        m.style.display='block'; mm.style.display='none';
+        document.getElementById('fpVerifyDoneMsg').style.display = 'block';
+        showStatus('success','✅ Отпечатки совпадают!');
+    } else {
+        m.style.display='none'; mm.style.display='block';
+        document.getElementById('fpVerifyDoneMsg').style.display = 'none';
+        showStatus('error','❌ Отпечатки НЕ совпадают!');
+    }
+});
+
+document.getElementById('establishConnectionBtn').addEventListener('click', async () => {
+    try {
+        await sodium.ready;
+        if (!myCombinedPublicKeyBuf || !myKxKeyPair || !myMlKemKeyPair) {
+            showStatus('error', 'Сначала создайте свой ключ!'); return;
+        }
+
+        const friendB64 = document.getElementById('friendHybridPublicKey').value.trim();
+        if (!friendB64) { showStatus('error', 'Вставьте ключ собеседника'); return; }
+
+        const friendBuf = base64ToArrayBuffer(friendB64);
+        if (friendBuf.byteLength !== 1216) {
+            showStatus('error', 'Неверный формат ключа (ожидается 1216 байт)'); return;
+        }
+
+        const friendX25519Pk = new Uint8Array(friendBuf.slice(0, 32));
+        if (friendX25519Pk.every(b => b === 0)) {
+            showStatus('error', 'Ошибка: недопустимый ключ'); return;
+        }
+
+        const friendMlKemPk = new Uint8Array(friendBuf.slice(32, 1216));
+        const sClassic = sodium.crypto_scalarmult(myKxKeyPair.privateKey, friendX25519Pk);
+        if (sClassic.every(b => b === 0)) {
+            showStatus('error', 'Ошибка: слабый ключ!'); secureZero(sClassic); return;
+        }
+
+        const myX25519Pk = new Uint8Array(myKxKeyPair.publicKey);
+        let cmp = 0;
+        for (let i = 0; i < 32; i++) {
+            if (myX25519Pk[i] < friendX25519Pk[i]) { cmp = -1; break; }
+            else if (myX25519Pk[i] > friendX25519Pk[i]) { cmp = 1; break; }
+        }
+        isInitiatorRole = cmp < 0;
+        tempSClassic = sClassic;
+        tempFriendX25519Pk = friendX25519Pk;
+
+        const { ml_kem768 } = await getNobleMlKem();
+        document.getElementById('ciphertextSection').style.display = 'block';
+
+        if (isInitiatorRole) {
+            const result = ml_kem768.encapsulate(friendMlKemPk);
+            pqcSharedSecret = result.sharedSecret;
+            mlKemCiphertext = result.cipherText;
+
+            document.getElementById('mlKemCiphertextOutput').value = arrayBufferToBase64(mlKemCiphertext.buffer);
+            document.getElementById('initiatorBlock').style.display = 'block';
+            document.getElementById('responderBlock').style.display = 'none';
+
+            finalizeHybridMix();
+            showStatus('success', '🔐 Вы Инициатор. Передайте код собеседнику.');
+            document.getElementById('connectionDoneMsg').style.display = 'block';
+        } else {
+            document.getElementById('initiatorBlock').style.display = 'none';
+            document.getElementById('responderBlock').style.display = 'block';
+            showStatus('info', 'Вы Принимающий. Запросите код у собеседника.');
+            document.getElementById('connectionDoneMsg').style.display = 'none';
+        }
+    } catch(e) { showStatus('error','Ошибка: ' + e.message); }
+});
+
+async function completeResponderConnection(btn) {
+    if (btn && btn.disabled) return;
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Настройка...'; }
+
+    try {
+        const ctB64 = document.getElementById('mlKemCiphertextInput').value.trim();
+        if (!ctB64) throw new Error('Вставьте код подтверждения');
+
+        const ctBuf = new Uint8Array(base64ToArrayBuffer(ctB64));
+        if (ctBuf.byteLength !== 1088) throw new Error('Неверный размер кода');
+
+        const { ml_kem768 } = await getNobleMlKem();
+        pqcSharedSecret = ml_kem768.decapsulate(ctBuf, myMlKemKeyPair.secretKey);
+
+        finalizeHybridMix();
+        showStatus('success', '🧬 Гибридный ключ активирован!');
+        document.getElementById('connectionDoneMsg').style.display = 'block';
+        if (btn) btn.textContent = '✅ Завершено';
+    } catch(e) {
+        showStatus('error', 'Ошибка: ' + e.message);
+        if (btn) { btn.disabled = false; btn.textContent = '🔐 Завершить настройку'; }
+    }
+}
+
+function finalizeHybridMix() {
+    const combined = new Uint8Array(tempSClassic.length + pqcSharedSecret.length);
+    combined.set(tempSClassic, 0);
+    combined.set(pqcSharedSecret, tempSClassic.length);
+
+    const finalKey = sodium.crypto_generichash(
+        sodium.crypto_aead_xchacha20poly1305_ietf_KEYBYTES,
+        combined
+    );
+
+    currentSymmetricKey = finalKey;
+    derivedAesKeyRaw = finalKey;
+
+    Ratchet.init(currentSymmetricKey, isInitiatorRole, tempFriendX25519Pk, myKxKeyPair);
+
+    isMlKemReady = true;
+    updateChatHeader();
+    updateChatEmptyState();
+
+    secureZero(combined);
+    if (tempSClassic) secureZero(tempSClassic);
+    if (pqcSharedSecret) secureZero(pqcSharedSecret);
+    if (mlKemCiphertext) secureZero(mlKemCiphertext);
+    if (myMlKemKeyPair && myMlKemKeyPair.secretKey) secureZero(myMlKemKeyPair.secretKey);
+
+    tempSClassic = null;
+    pqcSharedSecret = null;
+    mlKemCiphertext = null;
+}
+
+// =====================================================================
+// ВЫБОР МЕТОДА ВЕРИФИКАЦИИ
+// =====================================================================
+let selectedVerification = null;
+
+function selectVerification(method) {
+    selectedVerification = method;
+    document.querySelectorAll('.verification-choice button').forEach(b => b.classList.remove('selected'));
+    if (method === 'fingerprint') {
+        document.getElementById('choiceFingerprint').classList.add('selected');
+        document.getElementById('verificationFingerprintPanel').style.display = 'block';
+        document.getElementById('verificationSignaturesPanel').style.display = 'none';
+        // Копируем отпечаток
+        const fp1 = document.getElementById('friendHybridFingerprint');
+        const fp2 = document.getElementById('friendHybridFingerprint2');
+        if (fp1 && fp2) fp2.textContent = fp1.textContent;
+    } else {
+        document.getElementById('choiceSignatures').classList.add('selected');
+        document.getElementById('verificationSignaturesPanel').style.display = 'block';
+        document.getElementById('verificationFingerprintPanel').style.display = 'none';
+        updateFriendEd25519Fingerprint();
+    }
+}
+
+// =====================================================================
 // ED25519 ПОДПИСИ
 // =====================================================================
 async function generateEd25519KeyPair() {
     try {
         const keyPair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
         myEd25519PublicKeyRaw = await crypto.subtle.exportKey("raw", keyPair.publicKey);
-        const pubKeyEl = document.getElementById('myEd25519PublicKey');
-        if (pubKeyEl) pubKeyEl.value = arrayBufferToBase64(myEd25519PublicKeyRaw);
+        document.getElementById('myEd25519PublicKey').value = arrayBufferToBase64(myEd25519PublicKeyRaw);
         myEd25519PrivateKeyPkcs8 = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
         myEd25519PrivateKey = await crypto.subtle.importKey("pkcs8", myEd25519PrivateKeyPkcs8, {name:"Ed25519"}, false, ["sign"]);
         document.getElementById('myEd25519Fingerprint').textContent = await generateFingerprint(myEd25519PublicKeyRaw);
         document.getElementById('ed25519KeysGenerated').style.display = 'block';
         ed25519SigningEnabled = true;
         document.getElementById('ed25519MyStatus').className = 'status success';
-        document.getElementById('ed25519MyStatus').textContent = '✅ Ключи Ed25519 готовы!';
-        updateChatHeader(); showStatus('success', 'Ed25519 ключи сгенерированы!');
-    } catch(e) { showStatus('error', 'Ошибка генерации Ed25519: ' + e.message); }
+        document.getElementById('ed25519MyStatus').textContent = '✅ Ключи подписи готовы!';
+        updateChatHeader();
+        showStatus('success', '✍️ Ключи подписи созданы!');
+        // Автокопирование публичного ключа
+        try {
+            await navigator.clipboard.writeText(document.getElementById('myEd25519PublicKey').value);
+        } catch(e) {}
+    } catch(e) { showStatus('error', 'Ошибка: ' + e.message); }
 }
 
 async function importEd25519PrivateKey() {
@@ -1442,7 +1510,8 @@ async function importEd25519PrivateKey() {
         ed25519SigningEnabled = true;
         document.getElementById('ed25519MyStatus').className='status success';
         document.getElementById('ed25519MyStatus').textContent='✅ Приватный ключ импортирован!';
-        updateChatHeader(); showStatus('success','Приватный ключ импортирован!');
+        updateChatHeader();
+        showStatus('success','Приватный ключ импортирован!');
     } catch(e) { showStatus('error','Ошибка: '+e.message); }
 }
 
@@ -1456,7 +1525,12 @@ async function importFriendEd25519Key() {
         ed25519VerifyEnabled = true;
         document.getElementById('ed25519FriendStatus').className = 'status success';
         document.getElementById('ed25519FriendStatus').textContent = '✅ Ключ подписи собеседника установлен!';
-        updateChatHeader(); showStatus('success', 'Ключ подписи установлен!'); return true;
+        updateChatHeader();
+        showStatus('success', 'Ключ подписи установлен!');
+        // Показываем отпечаток
+        document.getElementById('friendEd25519Fingerprint').textContent = await generateFingerprint(buf);
+        document.getElementById('friendEd25519Verification').style.display = 'block';
+        return true;
     } catch(e) { showStatus('error', "Ошибка: " + e.message); return false; }
 }
 
@@ -1473,13 +1547,17 @@ async function updateFriendEd25519Fingerprint() {
 function verifyEd25519Fingerprint() {
     const computed = document.getElementById('friendEd25519Fingerprint').textContent||'';
     const provided = document.getElementById('friendProvidedEd25519Fingerprint').value.trim();
-    if (computed==='—') { alert('Сначала вставьте ключ'); return; }
-    if (!provided) { alert('Вставьте отпечаток'); return; }
+    if (computed==='—') { showStatus('error','Сначала вставьте ключ'); return; }
+    if (!provided) { showStatus('error','Вставьте отпечаток'); return; }
     const m = document.getElementById('ed25519FingerprintMatch'), mm = document.getElementById('ed25519FingerprintMismatch');
     if (provided.replace(/\s+/g,'')===computed.replace(/\s+/g,'')) {
-        m.style.display='block'; mm.style.display='none'; showStatus('success','Совпадают!');
+        m.style.display='block'; mm.style.display='none';
+        document.getElementById('sigVerifyDoneMsg').style.display = 'block';
+        showStatus('success','✅ Совпадают!');
     } else {
-        m.style.display='none'; mm.style.display='block'; showStatus('error','НЕ совпадают!');
+        m.style.display='none'; mm.style.display='block';
+        document.getElementById('sigVerifyDoneMsg').style.display = 'none';
+        showStatus('error','❌ НЕ совпадают!');
     }
 }
 
@@ -1502,7 +1580,7 @@ async function verifySignature(data, sig) {
 }
 
 // =====================================================================
-// ЧАТ: Упаковка метаданных Envelope v4 (от v5.1.1)
+// ЧАТ: Envelope v4
 // =====================================================================
 function buildEnvelope(type, ciphertextBase64, ratchetHeader = null) {
     const env = { v: 4, type, ct: ciphertextBase64 };
@@ -1515,15 +1593,10 @@ function parseEnvelope(text) {
         const cleanedText = text.replace(/\s+/g, '');
         const decoded = atob(cleanedText);
         const json = JSON.parse(decodeURIComponent(escape(decoded)));
-        if ((json.v >= 2 && json.v <= 4) && json.ct) return {
-            v: json.v, 
-            type: json.type, 
-            ct: json.ct, 
-            reply: json.reply, 
-            fileName: json.fileName, 
-            rh: json.rh
-        };
-    } catch(e) { }
+        if ((json.v >= 2 && json.v <= 4) && json.ct) {
+            return { v: json.v, type: json.type, ct: json.ct, reply: json.reply, fileName: json.fileName, rh: json.rh };
+        }
+    } catch(e) {}
     return { v: 1, type: 'msg', ct: text, reply: null, fileName: null, rh: null };
 }
 
@@ -1532,14 +1605,12 @@ function packPayload(metadata, binaryData = null) {
     const metaLen = metaBytes.length;
     let totalLen = 4 + metaLen;
     if (binaryData) totalLen += binaryData.byteLength;
-    
+
     const out = new Uint8Array(totalLen);
     const view = new DataView(out.buffer);
-    view.setUint32(0, metaLen, true); 
+    view.setUint32(0, metaLen, true);
     out.set(metaBytes, 4);
-    if (binaryData) {
-        out.set(new Uint8Array(binaryData), 4 + metaLen);
-    }
+    if (binaryData) out.set(new Uint8Array(binaryData), 4 + metaLen);
     return out;
 }
 
@@ -1548,7 +1619,7 @@ function unpackPayload(bytes) {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const metaLen = view.getUint32(0, true);
     if (bytes.byteLength < 4 + metaLen) throw new Error("Заявленная длина метаданных превышает размер пакета");
-    
+
     const metaBytes = bytes.subarray(4, 4 + metaLen);
     const metadata = JSON.parse(td.decode(metaBytes));
     const binaryData = bytes.byteLength > 4 + metaLen ? bytes.subarray(4 + metaLen) : null;
@@ -1559,14 +1630,12 @@ async function encryptPayload(plainBytes, aadPrefix, messageKey) {
     await sodium.ready;
     const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
     const timestamp = writeTimestamp(Date.now());
-    
-    // --- ПОДПИСЬ ВНУТРИ ---
+
     let sig = null;
     if (ed25519SigningEnabled && myEd25519PrivateKey) {
-        sig = await signData(plainBytes);  // подписываем исходный plaintext
+        sig = await signData(plainBytes);
     }
-    
-    // Формируем буфер: [флаг] + [подпись (64 байта)] + [plainBytes]
+
     let plainBytesWithSig;
     if (sig) {
         plainBytesWithSig = new Uint8Array(1 + 64 + plainBytes.length);
@@ -1578,7 +1647,7 @@ async function encryptPayload(plainBytes, aadPrefix, messageKey) {
         plainBytesWithSig[0] = 0x00;
         plainBytesWithSig.set(plainBytes, 1);
     }
-    
+
     const aad = new Uint8Array(aadPrefix.length + timestamp.length);
     aad.set(aadPrefix, 0);
     aad.set(timestamp, aadPrefix.length);
@@ -1586,12 +1655,12 @@ async function encryptPayload(plainBytes, aadPrefix, messageKey) {
     const encrypted = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
         plainBytesWithSig, aad, null, nonce, messageKey
     );
-    
+
     const payload = new Uint8Array(nonce.length + timestamp.length + encrypted.length);
     payload.set(nonce, 0);
     payload.set(timestamp, nonce.length);
     payload.set(encrypted, nonce.length + timestamp.length);
-    
+
     return arrayBufferToBase64(payload);
 }
 
@@ -1600,43 +1669,33 @@ async function decryptPayload(ctBase64, aadPrefix, messageKey) {
     const combined = new Uint8Array(base64ToArrayBuffer(ctBase64));
     const NONCE_LEN = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES;
     const TS_LEN = 8;
-    if (combined.length < NONCE_LEN + TS_LEN) {
-        throw new Error("Неверная длина зашифрованных данных");
-    }
+    if (combined.length < NONCE_LEN + TS_LEN) throw new Error("Неверная длина зашифрованных данных");
     const nonce = combined.slice(0, NONCE_LEN);
     const timestamp = combined.slice(NONCE_LEN, NONCE_LEN + TS_LEN);
     const encrypted = combined.slice(NONCE_LEN + TS_LEN);
-    
+
     const aad = new Uint8Array(aadPrefix.length + timestamp.length);
     aad.set(aadPrefix, 0);
     aad.set(timestamp, aadPrefix.length);
 
     let decrypted;
     try {
-        decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-            null, encrypted, aad, nonce, messageKey
-        );
+        decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(null, encrypted, aad, nonce, messageKey);
     } catch (e) {
         throw new Error("Неверный MAC или ключ");
     }
 
     const timeCheck = validateMessageTime(extractTimestamp(timestamp));
-    
-    // --- ИЗВЛЕКАЕМ ПОДПИСЬ ИЗ РАСШИФРОВАННЫХ ДАННЫХ ---
+
     let hasSig = false;
     let sigResult = null;
     let plainBytes = null;
-    if (!decrypted || decrypted.length === 0) {
-        throw new Error("Пустые расшифрованные данные");
-    }
+    if (!decrypted || decrypted.length === 0) throw new Error("Пустые расшифрованные данные");
     const flag = decrypted[0];
     if (flag === 0x01) {
-        if (decrypted.length < 1 + 64) {
-            throw new Error("Неверный формат: недостаточно данных для подписи");
-        }
+        if (decrypted.length < 1 + 64) throw new Error("Неверный формат: недостаточно данных для подписи");
         const sig = decrypted.slice(1, 65);
         plainBytes = decrypted.slice(65);
-        // Проверяем подпись над извлечённым plaintext
         const verification = await verifySignature(plainBytes, sig);
         sigResult = verification;
         hasSig = true;
@@ -1647,7 +1706,7 @@ async function decryptPayload(ctBase64, aadPrefix, messageKey) {
     } else {
         throw new Error("Неизвестный флаг подписи");
     }
-    
+
     return { data: plainBytes, hasSig, sigResult, timeCheck, isSigned: hasSig };
 }
 
@@ -1674,8 +1733,10 @@ async function toggleVoiceRecord() {
 }
 
 function updateChatHeader() {
-    const el = document.getElementById('chatHeaderStatus'), parts = [];
-    if (isMlKemReady) parts.push('🧬 Hybrid Ratchet'); else parts.push('⚠️ Ключ не установлен');
+    const el = document.getElementById('chatHeaderStatus');
+    const parts = [];
+    if (isMlKemReady) parts.push('🔒 Защищено');
+    else parts.push('⚠️ Ключ не установлен');
     if (ed25519SigningEnabled) parts.push('✍️ Подпись');
     if (ed25519VerifyEnabled) parts.push('🔍 Проверка');
     el.textContent = parts.join(' | ');
@@ -1686,10 +1747,10 @@ function clearEmptyState() { const empty = document.querySelector('.chat-empty')
 function updateChatEmptyState() {
     const container = document.getElementById('chatMessages');
     if (chatMessageCounter > 0) return;
-    let text = 'Установите гибридный ключ на вкладке «Обмен ключами»';
+    let text = 'Чат готов. Напишите сообщение!';
     if (isInitiatorRole === true) text = 'Напишите первое сообщение, чтобы начать диалог';
     else if (isInitiatorRole === false) text = 'Дождитесь, пока собеседник отправит первое сообщение';
-    container.innerHTML = `<div class="chat-empty"><div class="chat-empty-icon">🔐</div><div class="chat-empty-text">${text}</div></div>`;
+    container.innerHTML = `<div class="chat-empty"><div class="chat-empty-icon">💬</div><div class="chat-empty-text">${text}</div></div>`;
 }
 
 function getMessagePreview(gId) {
@@ -1703,7 +1764,6 @@ function getMessagePreview(gId) {
     }
     const cached = replyInfoCache.get(gId); return cached ? cached.preview : '…';
 }
-
 function getMessageSender(gId) {
     const localId = globalToLocalMap.get(gId);
     if (localId) {
@@ -1712,7 +1772,6 @@ function getMessageSender(gId) {
     }
     const cached = replyInfoCache.get(gId); return cached ? cached.sender : '';
 }
-
 function registerMessageInCache(gId, side, text, fileName) {
     if (!gId) return;
     const sender = side === 'mine' ? 'Вы' : 'Собеседник';
@@ -1721,31 +1780,27 @@ function registerMessageInCache(gId, side, text, fileName) {
     else if (fileName) preview = '📎 ' + fileName;
     replyInfoCache.set(gId, { sender, preview, exists: true });
 }
-
 function setReplyTo(gId) {
     replyToGlobalId = gId;
     document.getElementById('replyBarSender').textContent = getMessageSender(gId);
     document.getElementById('replyBarText').textContent = getMessagePreview(gId);
-    document.getElementById('chatReplyBar').classList.add('show'); 
+    document.getElementById('chatReplyBar').classList.add('show');
     document.getElementById('chatInput').focus();
 }
-
 function cancelReply() { replyToGlobalId = null; document.getElementById('chatReplyBar').classList.remove('show'); }
-
 function scrollToMessage(gId) {
     const localMsgId = globalToLocalMap.get(gId);
     const el = localMsgId ? document.getElementById('msg-' + localMsgId) : null;
-    if (el) { 
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' }); 
-        el.style.outline = '2px solid var(--primary-color)'; 
-        setTimeout(() => el.style.outline='', 1500); 
-    }
-    else showStatus('info', 'Сообщение отсутствует в локальном чате');
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.outline = '2px solid var(--primary-color)';
+        setTimeout(() => el.style.outline='', 1500);
+    } else showStatus('info', 'Сообщение отсутствует в локальном чате');
 }
 
 function addMessageBubble(opts) {
-    clearEmptyState(); 
-    const msgId = ++chatMessageCounter; 
+    clearEmptyState();
+    const msgId = ++chatMessageCounter;
     const container = document.getElementById('chatMessages');
 
     if (opts.globalId) {
@@ -1753,21 +1808,21 @@ function addMessageBubble(opts) {
         registerMessageInCache(opts.globalId, opts.side, opts.text, opts.fileInfo?.name);
     }
 
-    const bubble = document.createElement('div'); 
-    bubble.className = 'msg-bubble msg-' + opts.side; 
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble msg-' + opts.side;
     bubble.id = 'msg-' + msgId;
-    
+
     let html = `<div class="msg-sender">${opts.side==='mine' ? 'Вы' : 'Собеседник'}</div>`;
 
     if (opts.replyTo) {
         const replyGId = opts.replyTo;
         const replySender = opts.replySender || getMessageSender(replyGId) || 'Собеседник';
         const replyPreview = opts.replyPreview || getMessagePreview(replyGId) || '…';
-        
+
         if (!replyInfoCache.has(replyGId)) replyInfoCache.set(replyGId, { sender: replySender, preview: replyPreview, exists: false });
         const localReplyId = globalToLocalMap.get(replyGId);
         const elExists = localReplyId && document.getElementById('msg-' + localReplyId) !== null;
-        
+
         html += `<div class="msg-reply-preview" onclick="scrollToMessage('${replyGId}')" style="${elExists?'':'opacity:0.6;'}"><strong>${escapeHtml(replySender)}:</strong> ${escapeHtml(replyPreview)}</div>`;
     }
 
@@ -1796,12 +1851,12 @@ function addMessageBubble(opts) {
         if (!opts.fileInfo) html += `<button class="msg-action-btn" onclick="toggleCipher(${msgId})">🔤 Шифротекст</button><button class="msg-action-btn" onclick="copyCipher(${msgId})">📋 Копировать</button>`;
         if (opts.side==='mine' && opts.fileInfo) html += `<button class="msg-action-btn" onclick="downloadEncryptedFile(${msgId})">💾 Скачать</button>`;
     }
-    
+
     html += `<button class="msg-action-btn" onclick="setReplyTo('${opts.globalId || msgId}')">↩️ Ответить</button>`;
-    
+
     if (opts.fileInfo?.downloadData) html += `<button class="msg-action-btn" onclick="downloadFileFromMsg(${msgId})">💾 Скачать</button>`;
     html += '</div>';
-    
+
     if (opts.cipherText && !opts.fileInfo) html += `<div class="msg-cipher" id="cipher-${msgId}">${escapeHtml(opts.cipherText)}</div>`;
 
     bubble.innerHTML = html;
@@ -1827,11 +1882,11 @@ function downloadFileFromMsg(id) {
 function clearChat() { document.getElementById('chatMessages').innerHTML=''; chatMessageCounter=0; globalToLocalMap.clear(); replyInfoCache.clear(); cancelReply(); clearAttachedFile(); updateChatEmptyState(); }
 
 async function chatEncrypt() {
-    if (!isMlKemReady) { showStatus('error','Сначала завершите установку гибридного ключа'); return; }
-    const input = document.getElementById('chatInput'); 
-    const text = input.value.trim(); 
+    if (!isMlKemReady) { showStatus('error','Сначала завершите установку ключа'); return; }
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
     const hasFile = !!chatAttachedFile;
-    
+
     if (!text && !hasFile) { showStatus('error','Введите сообщение или прикрепите файл'); return; }
 
     try {
@@ -1850,7 +1905,7 @@ async function chatEncrypt() {
         if (hasFile) {
             metadata.fName = chatAttachedFile.file.name;
             metadata.fType = chatAttachedFile.file.type;
-            if (text) metadata.txt = text; 
+            if (text) metadata.txt = text;
 
             plainBytes = packPayload(metadata, chatAttachedFile.data);
             ctB64 = await encryptPayload(plainBytes, AAD_FILE, rData.mk);
@@ -1870,7 +1925,7 @@ async function chatEncrypt() {
         } else {
             metadata.txt = text;
             plainBytes = packPayload(metadata);
-            
+
             ctB64 = await encryptPayload(plainBytes, AAD_MESSAGE, rData.mk);
             envelope = buildEnvelope('msg', ctB64, rData.header);
 
@@ -1889,7 +1944,7 @@ async function chatEncrypt() {
 }
 
 async function chatDecrypt() {
-    if (!isMlKemReady) { showStatus('error','Сначала завершите установку гибридного ключа'); return; }
+    if (!isMlKemReady) { showStatus('error','Сначала завершите установку ключа'); return; }
     const input = document.getElementById('chatInput'); let rawText = input.value.trim();
     if (!rawText && chatAttachedFile) { try { rawText = new TextDecoder().decode(chatAttachedFile.data).trim(); } catch(e) { rawText = arrayBufferToBase64(chatAttachedFile.data); } clearAttachedFile(); }
     if (!rawText) { showStatus('error','Вставьте шифротекст'); return; }
@@ -1904,7 +1959,7 @@ async function chatDecrypt() {
         Ratchet.commitState(rRes.tentativeState, rRes.skipKeyToRemove);
 
         let metadata, binaryData;
-        
+
         if (env.v >= 4) {
             const unpacked = unpackPayload(res.data);
             metadata = unpacked.metadata;
@@ -1917,7 +1972,7 @@ async function chatDecrypt() {
                 metadata = { gId: crypto.randomUUID(), txt: td.decode(res.data) };
             }
             if (env.reply) {
-                metadata.rId = env.reply.id; 
+                metadata.rId = env.reply.id;
                 metadata.rSender = env.reply.sender;
                 metadata.rPrev = env.reply.preview;
             }
@@ -1927,7 +1982,7 @@ async function chatDecrypt() {
             addMessageBubble({
                 side: 'friend',
                 globalId: metadata.gId,
-                text: metadata.txt || null, 
+                text: metadata.txt || null,
                 cipherText: rawText,
                 fileInfo: { name: metadata.fName, size: binaryData.byteLength, type: 'application/octet-stream', downloadData: binaryData },
                 mediaData: binaryData,
@@ -1965,15 +2020,14 @@ function attachFile(file) {
     });
 }
 function clearAttachedFile() { chatAttachedFile = null; document.getElementById('chatFilePreview').classList.remove('show'); document.getElementById('chatFileInput').value = ''; }
-function autoResizeInput() { const el = document.getElementById('chatInput'); el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
+function autoResizeInput() { const el = document.getElementById('chatInput'); el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,110)+'px'; }
 
 function destroyAllData() {
-    if (!confirm('⚠️ Все ключи будут уничтожены!')) return;
-    
-    // Безопасное затирание критически важных ключей и секретов
-    secureZero(currentSymmetricKey); 
+    if (!confirm('⚠️ Все ключи будут уничтожены! Продолжить?')) return;
+
+    secureZero(currentSymmetricKey);
     secureZero(derivedAesKeyRaw);
-    
+
     if (myKxKeyPair) secureZero(myKxKeyPair.privateKey);
     if (myMlKemKeyPair && myMlKemKeyPair.secretKey) secureZero(myMlKemKeyPair.secretKey);
     if (pqcSharedSecret) secureZero(pqcSharedSecret);
@@ -1982,64 +2036,57 @@ function destroyAllData() {
     if (mlKemCiphertext) secureZero(mlKemCiphertext);
 
     if (Ratchet.state.RK) secureZero(Ratchet.state.RK);
-    if (Ratchet.state.CKs) secureZero(Ratchet.state.CKs); 
+    if (Ratchet.state.CKs) secureZero(Ratchet.state.CKs);
     if (Ratchet.state.CKr) secureZero(Ratchet.state.CKr);
     if (Ratchet.state.DHs?.privateKey) secureZero(Ratchet.state.DHs.privateKey);
     for (const k in Ratchet.state.skipped) secureZero(Ratchet.state.skipped[k]);
 
-    // Обнуление ссылок
-    currentSymmetricKey=null; myKxKeyPair=null; myMlKemKeyPair=null; myCombinedPublicKeyBuf=null;
-    pqcSharedSecret=null; mlKemCiphertext=null; isMlKemReady=false; tempSClassic=null; tempFriendX25519Pk=null;
-    myEd25519PrivateKey=null; myEd25519PublicKeyRaw=null; 
-    
-    if (myEd25519PrivateKeyPkcs8) secureZero(myEd25519PrivateKeyPkcs8); 
-    myEd25519PrivateKeyPkcs8=null;
-    
-    friendEd25519PublicKeyRaw=null; ed25519SigningEnabled=false; ed25519VerifyEnabled=false;
-    chatAttachedFile=null; replyToGlobalId=null; isInitiatorRole=null;
-    Ratchet.state = { RK:null, CKs:null, CKr:null, DHs:null, DHr:null, Ns:0, Nr:0, PN:0, skipped:{} }; 
+    currentSymmetricKey = null; myKxKeyPair = null; myMlKemKeyPair = null; myCombinedPublicKeyBuf = null;
+    pqcSharedSecret = null; mlKemCiphertext = null; isMlKemReady = false; tempSClassic = null; tempFriendX25519Pk = null;
+    myEd25519PrivateKey = null; myEd25519PublicKeyRaw = null;
+    if (myEd25519PrivateKeyPkcs8) secureZero(myEd25519PrivateKeyPkcs8);
+    myEd25519PrivateKeyPkcs8 = null;
+    friendEd25519PublicKeyRaw = null; ed25519SigningEnabled = false; ed25519VerifyEnabled = false;
+    chatAttachedFile = null; replyToGlobalId = null; isInitiatorRole = null;
+    Ratchet.state = { RK:null, CKs:null, CKr:null, DHs:null, DHr:null, Ns:0, Nr:0, PN:0, skipped:{} };
     globalToLocalMap.clear(); replyInfoCache.clear();
-    mediaObjectUrls.forEach(u=>URL.revokeObjectURL(u)); mediaObjectUrls=[];
+    mediaObjectUrls.forEach(u => URL.revokeObjectURL(u)); mediaObjectUrls = [];
 
-    document.querySelectorAll('textarea, input').forEach(el=>el.value='');
+    document.querySelectorAll('textarea, input').forEach(el => el.value = '');
     document.getElementById('myHybridFingerprint').textContent = '—';
     document.getElementById('friendHybridFingerprint').textContent = '—';
+    document.getElementById('friendHybridFingerprint2').textContent = '—';
     document.getElementById('friendHybridVerification').style.display = 'none';
     document.getElementById('ciphertextSection').style.display = 'none';
-    
-    document.getElementById('myEd25519Fingerprint').textContent = '—'; document.getElementById('friendEd25519Fingerprint').textContent = '—';
-    document.getElementById('ed25519KeysGenerated').style.display = 'none'; document.getElementById('friendEd25519Verification').style.display = 'none';
-    
-    clearChat(); showStatus('success', '🔥 Данные уничтожены!');
+    document.getElementById('connectionDoneMsg').style.display = 'none';
+    document.getElementById('myKeysDisplay').style.display = 'none';
+    document.getElementById('generateHybridKeysBtn').textContent = '🔐 Создать мой ключ';
+
+    document.getElementById('myEd25519Fingerprint').textContent = '—';
+    document.getElementById('friendEd25519Fingerprint').textContent = '—';
+    document.getElementById('ed25519KeysGenerated').style.display = 'none';
+    document.getElementById('friendEd25519Verification').style.display = 'none';
+    document.getElementById('ed25519MyStatus').className = 'status info';
+    document.getElementById('ed25519MyStatus').textContent = 'Ключи подписи не сгенерированы';
+    document.getElementById('ed25519FriendStatus').className = 'status info';
+    document.getElementById('ed25519FriendStatus').textContent = 'Ключ подписи собеседника не установлен';
+
+    document.getElementById('hybridFingerprintMatch').style.display = 'none';
+    document.getElementById('hybridFingerprintMismatch').style.display = 'none';
+    document.getElementById('ed25519FingerprintMatch').style.display = 'none';
+    document.getElementById('ed25519FingerprintMismatch').style.display = 'none';
+    document.getElementById('fpVerifyDoneMsg').style.display = 'none';
+    document.getElementById('sigVerifyDoneMsg').style.display = 'none';
+    document.getElementById('verificationFingerprintPanel').style.display = 'none';
+    document.getElementById('verificationSignaturesPanel').style.display = 'none';
+    document.querySelectorAll('.verification-choice button').forEach(b => b.classList.remove('selected'));
+    selectedVerification = null;
+
+    clearChat(); updateChatHeader(); updateChatEmptyState();
+    // Возврат на шаг 1
+    goToStep(1);
+    showStatus('success', '🔥 Данные уничтожены!');
 }
-
-document.addEventListener('DOMContentLoaded', async () => {
-    try { if (typeof sodium !== 'undefined') await sodium.ready; else { showStatus('error', 'libsodium не найден'); return; } } catch (e) { return; }
-    loadTheme();
-    document.getElementById('chatFileInput').addEventListener('change', e => { if(e.target.files[0]) attachFile(e.target.files[0]); });
-    const ci = document.getElementById('chatInput'); ci.addEventListener('input', autoResizeInput);
-    
-    ci.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) {
-            e.preventDefault(); const val = ci.value.trim(); if(val && looksLikeCiphertext(val)) chatDecrypt(); else chatEncrypt();
-        }
-    });
-    
-    ci.addEventListener('paste', async e => {
-        if(!e.clipboardData?.items) return;
-        for (let item of e.clipboardData.items) { if(item.kind === 'file') { e.preventDefault(); const file = item.getAsFile(); if (file) attachFile(file); return; } }
-    });
-    
-    document.getElementById('chatMessages').addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
-    document.getElementById('chatMessages').addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer.files.length) attachFile(e.dataTransfer.files[0]); });
-    ci.addEventListener('dragover', (e) => { e.preventDefault(); });
-    ci.addEventListener('drop', (e) => {
-        e.preventDefault();
-        if (e.dataTransfer.files.length) attachFile(e.dataTransfer.files[0]);
-    });
-
-    updateChatHeader();
-});
 
 function looksLikeCiphertext(text) {
     const cleaned = text.replace(/\s+/g, '');
@@ -2047,11 +2094,55 @@ function looksLikeCiphertext(text) {
     return /^[A-Za-z0-9+/]+={0,2}$/.test(cleaned);
 }
 
+// =====================================================================
+// ИНИЦИАЛИЗАЦИЯ
+// =====================================================================
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        if (typeof sodium !== 'undefined') await sodium.ready;
+        else { showStatus('error', 'libsodium не найден'); return; }
+    } catch(e) { return; }
+
+    loadTheme();
+
+    document.getElementById('chatFileInput').addEventListener('change', e => { if(e.target.files[0]) attachFile(e.target.files[0]); });
+    const ci = document.getElementById('chatInput'); ci.addEventListener('input', autoResizeInput);
+
+    ci.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) {
+            e.preventDefault(); const val = ci.value.trim(); if(val && looksLikeCiphertext(val)) chatDecrypt(); else chatEncrypt();
+        }
+    });
+
+    ci.addEventListener('paste', async e => {
+        if(!e.clipboardData?.items) return;
+        for (let item of e.clipboardData.items) {
+            if(item.kind === 'file') { e.preventDefault(); const file = item.getAsFile(); if (file) attachFile(file); return; }
+        }
+    });
+
+    document.getElementById('chatMessages').addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+    document.getElementById('chatMessages').addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer.files.length) attachFile(e.dataTransfer.files[0]); });
+    ci.addEventListener('dragover', e => e.preventDefault());
+    ci.addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer.files.length) attachFile(e.dataTransfer.files[0]); });
+
+    // Импорт публичного ключа Ed25519 через Enter
+    document.getElementById('friendEd25519PublicKey').addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); importFriendEd25519Key(); }
+    });
+
+    // Автоматически переходим на шаг 2 после создания ключа (через кнопку)
+    // goToStep(1) уже активен по умолчанию
+
+    updateChatHeader();
+    updateChatEmptyState();
+});
+
 window.addEventListener('beforeunload', () => mediaObjectUrls.forEach(u => URL.revokeObjectURL(u)));
 
 document.getElementById('exportPrivateKeyBtn')?.addEventListener('click', async () => {
     if (!myEd25519PrivateKeyPkcs8) { showStatus('error', 'Приватный ключ отсутствует'); return; }
-    await navigator.clipboard.writeText(arrayBufferToBase64(myEd25519PrivateKeyPkcs8)); 
+    await navigator.clipboard.writeText(arrayBufferToBase64(myEd25519PrivateKeyPkcs8));
     showStatus('success','Ключ скопирован на 30 секунд');
     setTimeout(async () => { try { await navigator.clipboard.writeText(''); } catch {} }, 30000);
 });
