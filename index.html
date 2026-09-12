@@ -628,7 +628,7 @@
 
 <!-- ===== Шапка ===== -->
 <div class="app-header">
-    <h1>🔐 Secure Messenger <span class="badge">v6.1</span></h1>
+    <h1>🔐 Secure Messenger <span class="badge">v6.1.1</span></h1>
 </div>
 
 <!-- ===== Индикаторы шагов ===== -->
@@ -650,16 +650,7 @@
     <button id="generateHybridKeysBtn" style="width:100%;">🔐 Создать мой ключ</button>
 
     <div id="myKeysDisplay" style="display:none;">
-        <div class="verification-section mt-8">
-            <h4>🔍 Отпечаток вашего ключа:</h4>
-            <div class="input-wrapper">
-                <div class="fingerprint" id="myHybridFingerprint">—</div>
-                <div class="input-actions" style="top:4px;">
-                    <button class="action-btn" onclick="copyField('myHybridFingerprint')" title="Копировать">📋</button>
-                </div>
-            </div>
-
-            <label>Ваш публичный ключ (передайте собеседнику):</label>
+<label>Ваш публичный ключ (передайте собеседнику):</label>
             <div class="input-wrapper">
                 <textarea id="myHybridPublicKey" readonly></textarea>
                 <div class="input-actions">
@@ -667,7 +658,6 @@
                 </div>
             </div>
             <div class="status success" style="margin-top:8px;">✅ Ключ скопирован в буфер обмена. Перешлите его собеседнику.</div>
-        </div>
         <button class="btn-success" onclick="goToStep(2)" style="margin-top:10px;">➡️ Продолжить</button>
     </div>
 </div>
@@ -686,11 +676,6 @@
             <button class="action-btn" onclick="pasteToField('friendHybridPublicKey')" title="Вставить">📥</button>
             <button class="action-btn" onclick="clearField('friendHybridPublicKey')" title="Очистить">🗑️</button>
         </div>
-    </div>
-
-    <div class="comparison-section" id="friendHybridVerification" style="display:none;">
-        <h4>🔍 Отпечаток ключа собеседника</h4>
-        <div class="fingerprint" id="friendHybridFingerprint">—</div>
     </div>
 
     <button id="establishConnectionBtn" style="width:100%; margin-top:10px;">🔑 Установить соединение</button>
@@ -752,8 +737,15 @@
     <div id="verificationFingerprintPanel" style="display:none;">
         <div class="verification-section">
             <h4>🔍 Сравните отпечатки</h4>
-            <p style="font-size:14px;opacity:0.8;">Попросите собеседника показать отпечаток его ключа и вставьте его ниже.</p>
-            <div><strong>Отпечаток собеседника (вычислен):</strong></div>
+            <p style="font-size:14px;opacity:0.8;">Сверьте отпечатки через отдельный безопасный канал связи.</p>
+            <div><strong>1. Ваш отпечаток (передайте собеседнику):</strong></div>
+            <div class="input-wrapper">
+                <div class="fingerprint" id="myHybridFingerprint">—</div>
+                <div class="input-actions" style="top:4px;">
+                    <button class="action-btn" onclick="copyField('myHybridFingerprint')" title="Копировать">📋</button>
+                </div>
+            </div>
+            <div style="margin-top:12px;"><strong>2. Отпечаток собеседника (вычислен):</strong></div>
             <div class="fingerprint" id="friendHybridFingerprint2">—</div>
             <label>Отпечаток, который прислал собеседник:</label>
             <div class="input-wrapper">
@@ -1207,10 +1199,11 @@ function goToStep(step) {
 
     // Если переходим на шаг 4, обновляем отпечатки
     if (step === 4) {
-        // Копируем отпечаток из шага 2
-        const fp1 = document.getElementById('friendHybridFingerprint');
-        const fp2 = document.getElementById('friendHybridFingerprint2');
-        if (fp1 && fp2) fp2.textContent = fp1.textContent;
+        // Обновляем отпечаток собеседника для MITM-проверки
+        updateFriendHybridFingerprint();
+        // Отображаем сохранённый отпечаток собственного ключа
+        const myFp = document.getElementById('myHybridFingerprint');
+        if (myFp) myFp.textContent = myHybridFingerprintStr || '—';
         // Обновляем Ed25519
         updateFriendEd25519Fingerprint();
     }
@@ -1280,7 +1273,6 @@ document.getElementById('generateHybridKeysBtn').addEventListener('click', async
 
         document.getElementById('myHybridPublicKey').value = arrayBufferToBase64(myCombinedPublicKeyBuf);
         myHybridFingerprintStr = await generateFingerprint(myCombinedPublicKeyBuf);
-        document.getElementById('myHybridFingerprint').textContent = myHybridFingerprintStr;
 
         document.getElementById('myKeysDisplay').style.display = 'block';
         document.getElementById('generateHybridKeysBtn').textContent = '✅ Ключ создан';
@@ -1296,31 +1288,24 @@ document.getElementById('generateHybridKeysBtn').addEventListener('click', async
 
 async function updateFriendHybridFingerprint() {
     const b64 = document.getElementById('friendHybridPublicKey').value.trim();
-    const block = document.getElementById('friendHybridVerification');
-    const fp = document.getElementById('friendHybridFingerprint');
     const fp2 = document.getElementById('friendHybridFingerprint2');
 
-    block.style.display = 'none'; fp.textContent = '—'; if (fp2) fp2.textContent = '—';
+    // Отпечаток вычисляется здесь, но отображается только на шаге MITM-проверки.
+    if (fp2) fp2.textContent = '—';
     if (!b64) return;
 
     try {
         const buf = base64ToArrayBuffer(b64);
-        if (buf.byteLength !== 1216) {
-            fp.textContent = '❌ Неверный размер ключа (должен быть 1216 байт)';
-            block.style.display = 'block'; return;
-        }
+        if (buf.byteLength !== 1216) return;
         const f = await generateFingerprint(buf);
-        fp.textContent = f;
         if (fp2) fp2.textContent = f;
-        block.style.display = 'block';
     } catch(e) {
-        fp.textContent = '❌ Ошибка чтения Base64';
-        block.style.display = 'block';
+        if (fp2) fp2.textContent = '—';
     }
 }
 
 document.getElementById('verifyHybridFingerprintBtn').addEventListener('click', () => {
-    const computed = document.getElementById('friendHybridFingerprint').textContent || '';
+    const computed = document.getElementById('friendHybridFingerprint2').textContent || '';
     const provided = document.getElementById('friendProvidedHybridFingerprint').value.trim();
     if (computed === '—') { showStatus('error','Сначала вставьте ключ собеседника'); return; }
     if (!provided) { showStatus('error','Вставьте отпечаток собеседника'); return; }
@@ -1465,10 +1450,10 @@ function selectVerification(method) {
         document.getElementById('choiceFingerprint').classList.add('selected');
         document.getElementById('verificationFingerprintPanel').style.display = 'block';
         document.getElementById('verificationSignaturesPanel').style.display = 'none';
-        // Копируем отпечаток
-        const fp1 = document.getElementById('friendHybridFingerprint');
-        const fp2 = document.getElementById('friendHybridFingerprint2');
-        if (fp1 && fp2) fp2.textContent = fp1.textContent;
+        // Показываем оба отпечатка только в панели MITM-проверки
+        const myFp = document.getElementById('myHybridFingerprint');
+        if (myFp) myFp.textContent = myHybridFingerprintStr || '—';
+        updateFriendHybridFingerprint();
     } else {
         document.getElementById('choiceSignatures').classList.add('selected');
         document.getElementById('verificationSignaturesPanel').style.display = 'block';
@@ -2062,9 +2047,7 @@ function destroyAllData() {
 
     document.querySelectorAll('textarea, input').forEach(el => el.value = '');
     document.getElementById('myHybridFingerprint').textContent = '—';
-    document.getElementById('friendHybridFingerprint').textContent = '—';
     document.getElementById('friendHybridFingerprint2').textContent = '—';
-    document.getElementById('friendHybridVerification').style.display = 'none';
     document.getElementById('ciphertextSection').style.display = 'none';
     document.getElementById('connectionDoneMsg').style.display = 'none';
     document.getElementById('myKeysDisplay').style.display = 'none';
