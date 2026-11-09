@@ -565,21 +565,27 @@
         .w-full { width: 100%; }
 
         @media (max-width: 768px) {
-            body { margin: 10px auto; padding: 0 12px; }
+            body { margin: 8px auto; padding: 0 8px; }
             .theme-panel { position: relative; top: auto; right: auto; margin-bottom: 12px; max-width: none; }
             .app-header h1 { font-size: 1.2em; }
             .step-dot { font-size: 12px; padding: 4px 10px; }
             .step-card { padding: 14px 16px; }
+            #step5.step-card { padding: 10px 8px; }
             .card-row { grid-template-columns: 1fr; gap: 12px; }
             .fingerprint { font-size: 16px; padding: 10px; }
-            .chat-container { height: 65vh; min-height: 350px; }
-            .msg-bubble { max-width: 88%; }
+            .chat-container { height: 82vh; min-height: 520px; }
+            .msg-bubble { max-width: 92%; }
+            .msg-media img { max-height: 450px; }
             .verification-choice button { min-width: 120px; padding: 10px 14px; font-size: 14px; }
         }
         @media (max-width: 480px) {
+            body { margin: 4px auto; padding: 0 4px; }
             .step-card { padding: 12px; }
+            #step5.step-card { padding: 8px 6px; }
             .fingerprint { font-size: 14px; }
-            .chat-container { height: 58vh; }
+            .chat-container { height: 85vh; min-height: 500px; }
+            .chat-messages { padding: 10px 8px; }
+            .msg-bubble { max-width: 94%; }
             .step-dot .label { display: none; }
             .step-dot { padding: 4px 8px; }
         }
@@ -628,7 +634,7 @@
 
 <!-- ===== Шапка ===== -->
 <div class="app-header">
-    <h1>🔐 Secure Messenger <span class="badge">v6.1.1</span></h1>
+    <h1>🔐 Secure Messenger <span class="badge">v6.1.2</span></h1>
 </div>
 
 <!-- ===== Индикаторы шагов ===== -->
@@ -790,10 +796,6 @@
                     </div>
                     <div class="status info" id="ed25519MyStatus">Ключи подписи не сгенерированы</div>
                 </div>
-                    <label>Отпечаток:</label>
-                    <div class="fingerprint" id="myEd25519Fingerprint">—</div>
-                    <div class="status info" id="ed25519MyStatus">Ключи подписи не сгенерированы</div>
-                </div>
                 <div style="margin-top:12px; border-top:1px solid var(--border-color); padding-top:12px;">
                     <h4>📥 Импорт приватного ключа</h4>
                     <div class="input-wrapper">
@@ -844,8 +846,8 @@
         </div>
         <div id="sigVerifyDoneMsg" style="display:none; margin-top:12px;">
             <div class="status success">✅ Проверка по подписям пройдена!</div>
-            <button class="btn-success" onclick="goToStep(5)" style="margin-top:10px;">💬 Перейти в чат</button>
         </div>
+        <button class="btn-success" onclick="goToStep(5)" style="margin-top:12px; width:100%;">💬 Перейти в чат</button>
     </div>
 </div>
 
